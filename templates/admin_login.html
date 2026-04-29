@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Login</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+    .brand-gradient {
+        background: linear-gradient(135deg, #0f172a 0%, #0b3b63 40%, #0ea5e9 100%);
+        background-size: 180% 180%;
+        animation: gradientShift 12s ease infinite;
+    }
+
+    .wave-overlay {
+        position: absolute;
+        inset: 0;
+        opacity: 0.15;
+        background-image:
+            radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.35) 0 1px, transparent 1px),
+            radial-gradient(circle at 80% 35%, rgba(255, 255, 255, 0.35) 0 1px, transparent 1px),
+            linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.25) 50%, transparent 100%);
+        background-size: 28px 28px, 36px 36px, cover;
+        pointer-events: none;
+    }
+
+    .float-shape {
+        position: absolute;
+        border-radius: 9999px;
+        filter: blur(2px);
+        opacity: 0.22;
+        animation: floatY 7s ease-in-out infinite;
+    }
+
+    .float-shape:nth-child(1) {
+        width: 180px;
+        height: 180px;
+        top: 9%;
+        right: 12%;
+        background: rgba(56, 189, 248, 0.8);
+        animation-delay: 0s;
+    }
+
+    .float-shape:nth-child(2) {
+        width: 130px;
+        height: 130px;
+        bottom: 12%;
+        left: 15%;
+        background: rgba(148, 204, 255, 0.8);
+        animation-delay: 1.2s;
+    }
+
+    .float-shape:nth-child(3) {
+        width: 95px;
+        height: 95px;
+        top: 56%;
+        right: 24%;
+        background: rgba(255, 255, 255, 0.75);
+        animation-delay: 2.4s;
+    }
+
+    @keyframes gradientShift {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+
+    @keyframes floatY {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-12px); }
+    }
+</style>
+</head>
+<body
+    class="min-h-screen bg-slate-100 text-slate-800"
+    data-supabase-url="{{ supabase_url|default('', true) }}"
+    data-supabase-anon-key="{{ supabase_anon_key|default('', true) }}"
+>
+<main class="grid min-h-screen w-full grid-cols-1 lg:grid-cols-12">
+    <section class="relative hidden lg:col-span-5 lg:flex lg:flex-col lg:justify-between brand-gradient px-10 py-12 text-white xl:px-14">
+        <div class="wave-overlay"></div>
+        <div class="float-shape"></div>
+        <div class="float-shape"></div>
+        <div class="float-shape"></div>
+
+        <div class="relative z-10">
+            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-sky-100/90">Bagasbas Resort</p>
+            <h1 class="mt-5 text-4xl font-black leading-tight tracking-tight xl:text-5xl">Smart Beach Reservation System</h1>
+            <p class="mt-5 max-w-md text-sm leading-relaxed text-sky-100/90 xl:text-base">
+                Secure access for booking operations, scanner workflows, approvals, and daily resort analytics.
+            </p>
+        </div>
+
+        <p class="relative z-10 text-xs font-medium tracking-wide text-sky-100/80">Copyright 2026 Bagasbas Resort</p>
+    </section>
+
+    <section class="col-span-1 flex items-center justify-center px-4 py-10 sm:px-8 lg:col-span-7 lg:px-10 xl:px-14">
+        <div class="w-full max-w-md rounded-2xl border border-slate-200/80 bg-white p-8 shadow-xl transition-all duration-200">
+            <div>
+                <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Admin Portal</p>
+                <h2 class="mt-2 text-3xl font-bold tracking-tight text-slate-900">Welcome Back</h2>
+                <p class="mt-2 text-sm text-slate-500">Sign in to manage bookings and operations.</p>
+            </div>
+
+            <form id="loginForm" class="mt-7 space-y-4" novalidate>
+                <div>
+                    <label for="email" class="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">Email</label>
+                    <div class="relative">
+                        <span class="pointer-events-none absolute left-3 top-3 text-slate-400" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/>
+                                <path d="m22 6-10 7L2 6"/>
+                            </svg>
+                        </span>
+                        <input id="email" type="email" autocomplete="email" placeholder="admin@yourdomain.com" class="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-sm text-slate-800 placeholder:text-slate-400 transition-all duration-200 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/30" required>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="password" class="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">Password</label>
+                    <div class="relative">
+                        <span class="pointer-events-none absolute left-3 top-3 text-slate-400" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                            </svg>
+                        </span>
+                        <input id="password" type="password" autocomplete="current-password" placeholder="Enter your password" class="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-10 pr-11 text-sm text-slate-800 placeholder:text-slate-400 transition-all duration-200 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/30" required>
+                        <button id="togglePasswordBtn" type="button" class="absolute right-3 top-2.5 rounded-md p-1 text-slate-400 transition-all duration-200 hover:bg-slate-100 hover:text-slate-600" aria-label="Toggle password visibility">
+                            <svg id="eyeIcon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/>
+                                <circle cx="12" cy="12" r="3"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <label class="flex cursor-pointer items-center justify-between rounded-lg border border-transparent px-1 py-1 text-sm text-slate-600 transition-all duration-200 hover:border-slate-200">
+                    <span class="inline-flex items-center gap-2">
+                        <input id="rememberSession" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-400" checked>
+                        Remember session
+                    </span>
+                </label>
+
+                <button id="loginBtn" type="submit" class="group relative flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition-all duration-200 hover:from-sky-600 hover:to-blue-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-70">
+                    <span id="spinner" class="hidden h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></span>
+                    <span id="loginBtnText">Sign In</span>
+                </button>
+
+                <p id="error" class="min-h-5 text-sm text-red-500"></p>
+            </form>
+        </div>
+    </section>
+</main>
+
+<script>
+const TOKEN_KEY = 'access_token';
+const SUPABASE_URL = document.body.dataset.supabaseUrl || '';
+const SUPABASE_ANON_KEY = document.body.dataset.supabaseAnonKey || '';
+
+const refs = {
+    form: document.getElementById('loginForm'),
+    email: document.getElementById('email'),
+    password: document.getElementById('password'),
+    rememberSession: document.getElementById('rememberSession'),
+    togglePasswordBtn: document.getElementById('togglePasswordBtn'),
+    eyeIcon: document.getElementById('eyeIcon'),
+    loginBtn: document.getElementById('loginBtn'),
+    loginBtnText: document.getElementById('loginBtnText'),
+    spinner: document.getElementById('spinner'),
+    error: document.getElementById('error'),
+};
+
+const supabaseClient = (window.supabase && SUPABASE_URL && SUPABASE_ANON_KEY)
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+    : null;
+
+function getStoredToken() {
+    return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY) || '';
+}
+
+function setStoredToken(token, rememberSession) {
+    localStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(TOKEN_KEY);
+    if (!token) {
+        return;
+    }
+
+    if (rememberSession) {
+        localStorage.setItem(TOKEN_KEY, token);
+        return;
+    }
+
+    sessionStorage.setItem(TOKEN_KEY, token);
+}
+
+function clearStoredToken() {
+    localStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(TOKEN_KEY);
+}
+
+function setLoadingState(isLoading) {
+    refs.loginBtn.disabled = isLoading;
+    refs.spinner.classList.toggle('hidden', !isLoading);
+    refs.loginBtnText.textContent = isLoading ? 'Signing in...' : 'Sign In';
+}
+
+function togglePasswordVisibility() {
+    const hidden = refs.password.type === 'password';
+    refs.password.type = hidden ? 'text' : 'password';
+    refs.eyeIcon.innerHTML = hidden
+        ? '<path d="m1 1 22 22"/><path d="M10.6 10.6A3 3 0 0 0 13.4 13.4"/><path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a21.76 21.76 0 0 1-2.17 3.19"/><path d="M6.61 6.61A20.2 20.2 0 0 0 1 12s4 8 11 8a10.94 10.94 0 0 0 5.76-1.61"/>'
+        : '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/>';
+}
+
+async function fetchAdminProfile(token) {
+    const response = await fetch('/api/admin/me', {
+        headers: {
+            Authorization: 'Bearer ' + token,
+        },
+    });
+
+    const data = await response.json().catch(() => ({}));
+    return { response, data };
+}
+
+function redirectByRole(role) {
+    if (String(role || '').toLowerCase() === 'staff') {
+        window.location.replace('/admin/scanner');
+        return;
+    }
+
+    window.location.replace('/admin/dashboard');
+}
+
+async function checkSession() {
+    if (!supabaseClient) {
+        refs.error.textContent = 'Missing SUPABASE_URL or SUPABASE_ANON_KEY in environment.';
+        refs.loginBtn.disabled = true;
+        return;
+    }
+
+    const token = getStoredToken();
+    if (!token) {
+        return;
+    }
+
+    try {
+        const { response, data } = await fetchAdminProfile(token);
+        if (response.ok && data.admin) {
+            redirectByRole(data.admin.role);
+            return;
+        }
+
+        clearStoredToken();
+    } catch (error) {
+        clearStoredToken();
+    }
+}
+
+async function handleLogin(event) {
+    event.preventDefault();
+    refs.error.textContent = '';
+
+    const email = refs.email.value.trim();
+    const password = refs.password.value;
+    const rememberSession = refs.rememberSession.checked;
+
+    if (!email || !password) {
+        refs.error.textContent = 'Email and password are required.';
+        return;
+    }
+
+    if (!supabaseClient) {
+        refs.error.textContent = 'Missing SUPABASE_URL or SUPABASE_ANON_KEY in environment.';
+        return;
+    }
+
+    setLoadingState(true);
+
+    try {
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
+            email,
+            password,
+        });
+
+        if (error) {
+            refs.error.textContent = error.message || 'Invalid credentials';
+            return;
+        }
+
+        const token = data?.session?.access_token || '';
+        if (!token) {
+            refs.error.textContent = 'Login succeeded but no access token was returned.';
+            return;
+        }
+
+        setStoredToken(token, rememberSession);
+        const profile = await fetchAdminProfile(token);
+        if (!profile.response.ok || !profile.data.admin) {
+            clearStoredToken();
+            refs.error.textContent = profile.data.error || 'Account is not allowed to access admin tools.';
+            try {
+                await supabaseClient.auth.signOut();
+            } catch (signoutError) {
+            }
+            return;
+        }
+
+        redirectByRole(profile.data.admin.role);
+    } catch (error) {
+        refs.error.textContent = 'Unable to login right now. Please try again.';
+    } finally {
+        setLoadingState(false);
+    }
+}
+
+refs.form.addEventListener('submit', handleLogin);
+refs.togglePasswordBtn.addEventListener('click', togglePasswordVisibility);
+checkSession();
+</script>
+</body>
+</html>

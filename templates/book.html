@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Book Your Stay</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+.booking-loader-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 9999;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(15, 23, 42, 0.5);
+	backdrop-filter: blur(3px);
+}
+
+.booking-loader-overlay.hidden {
+	display: none;
+}
+
+.booking-loader-card {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 14px;
+	padding: 20px 24px;
+	border-radius: 14px;
+	background: rgba(255, 255, 255, 0.96);
+	box-shadow: 0 18px 45px rgba(15, 23, 42, 0.25);
+	min-width: 180px;
+}
+
+.booking-loader-text {
+	font-size: 14px;
+	font-weight: 600;
+	color: #334155;
+}
+
+/* From Uiverse.io by satyamchaudharydev */
+.loading {
+	--speed-of-animation: 0.9s;
+	--gap: 6px;
+	--first-color: #4c86f9;
+	--second-color: #49a84c;
+	--third-color: #f6bb02;
+	--fourth-color: #f6bb02;
+	--fifth-color: #2196f3;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	width: 100px;
+	gap: var(--gap);
+	height: 100px;
+}
+
+.loading span {
+	width: 4px;
+	height: 50px;
+	background: var(--first-color);
+	animation: scale var(--speed-of-animation) ease-in-out infinite;
+}
+
+.loading span:nth-child(2) {
+	background: var(--second-color);
+	animation-delay: -0.8s;
+}
+
+.loading span:nth-child(3) {
+	background: var(--third-color);
+	animation-delay: -0.7s;
+}
+
+.loading span:nth-child(4) {
+	background: var(--fourth-color);
+	animation-delay: -0.6s;
+}
+
+.loading span:nth-child(5) {
+	background: var(--fifth-color);
+	animation-delay: -0.5s;
+}
+
+@keyframes scale {
+	0%,
+	40%,
+	100% {
+		transform: scaleY(0.05);
+	}
+
+	20% {
+		transform: scaleY(1);
+	}
+}
+</style>
+</head>
+<body class="min-h-screen bg-gradient-to-b from-slate-50 via-white to-teal-50/40 font-[Inter] text-slate-800">
+
+<div id="bookingLoaderOverlay" class="booking-loader-overlay hidden" aria-live="polite" aria-busy="false" aria-label="Submitting booking">
+	<div class="booking-loader-card" role="status">
+		<div class="loading" aria-hidden="true">
+			<span></span>
+			<span></span>
+			<span></span>
+			<span></span>
+			<span></span>
+		</div>
+		<p class="booking-loader-text">Submitting your booking...</p>
+	</div>
+</div>
+
+<main class="relative mx-auto w-full max-w-5xl overflow-hidden px-4 py-12 md:px-6">
+	<div class="pointer-events-none absolute -left-20 top-10 h-56 w-56 rounded-full bg-teal-200/20 blur-3xl"></div>
+	<div class="pointer-events-none absolute -right-16 bottom-12 h-60 w-60 rounded-full bg-sky-200/25 blur-3xl"></div>
+
+	<div class="relative mb-8 flex flex-wrap items-start justify-between gap-4">
+		<div>
+			<h1 class="text-3xl font-extrabold tracking-tight text-slate-900 md:text-[32px]">Booking Wizard</h1>
+			<p class="mt-2 text-sm text-slate-500 md:text-base">Complete each step to submit your reservation with confidence.</p>
+		</div>
+		<a href="/" class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-100">
+			<span aria-hidden="true">&larr;</span>
+			<span>Back to Home</span>
+		</a>
+	</div>
+
+	<div class="relative mb-6 rounded-2xl border border-slate-200/80 bg-white/90 p-4 shadow-lg md:p-6">
+		<div class="pointer-events-none absolute left-8 right-8 top-1/2 hidden h-px -translate-y-1/2 bg-slate-200 md:block"></div>
+		<ol id="progressSteps" class="relative flex snap-x gap-3 overflow-x-auto pb-1 text-sm md:grid md:grid-cols-4 md:overflow-visible"></ol>
+	</div>
+
+	<div id="globalStatus" class="mb-4 hidden rounded-xl px-4 py-3 text-sm shadow-sm"></div>
+
+	<section class="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-lg md:p-8">
+		<form id="bookingWizard" class="space-y-8" novalidate>
+
+			<div data-step-panel="1" class="space-y-6">
+				<div class="space-y-2">
+					<h2 class="inline-flex items-center gap-2 text-2xl font-semibold text-slate-900"><span aria-hidden="true">&#128197;</span><span>Step 1: Select Your Date</span></h2>
+					<p class="text-sm text-slate-500 md:text-base">Choose your preferred date and instantly see if cottages are open.</p>
+				</div>
+
+				<div class="max-w-xl">
+					<label for="date" class="mb-2 block text-sm font-medium text-slate-700">Booking Date</label>
+					<div class="relative">
+						<span class="pointer-events-none absolute inset-y-0 left-4 inline-flex items-center text-slate-400" aria-hidden="true">&#128197;</span>
+						<input type="date" id="date" class="h-12 w-full rounded-xl border border-slate-300 bg-white pl-11 pr-4 text-sm text-slate-800 transition focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-100">
+					</div>
+					<p id="dateValidation" class="mt-2 hidden text-sm text-rose-700"></p>
+				</div>
+
+				<div class="max-w-xl">
+					<label for="arrivalTime" class="mb-2 block text-sm font-medium text-slate-700">Expected Arrival Time</label>
+					<input type="time" id="arrivalTime" min="09:00" max="17:00" class="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm text-slate-800 transition focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-100" required>
+					<p class="mt-2 text-xs text-slate-500">Operating hours: 09:00 to 17:00.</p>
+				</div>
+
+				<div id="dateAvailability" class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 transition-all duration-300">
+					<p class="font-semibold">Availability Status</p>
+					<p class="mt-1">Select a date to check availability.</p>
+				</div>
+			</div>
+
+			<div data-step-panel="2" class="hidden space-y-4">
+				<h2 class="text-xl font-semibold text-slate-900">Step 2: Choose Cottage</h2>
+				<p class="text-sm text-slate-600">Only available cottages for the selected date are shown.</p>
+				<p id="selectedCottageHint" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">Selected cottage: None</p>
+				<div id="cottages" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"></div>
+			</div>
+
+			<div data-step-panel="3" class="hidden space-y-4">
+				<h2 class="text-xl font-semibold text-slate-900">Step 3: Guest and Contact Details</h2>
+				<p class="text-sm text-slate-600">Adults are charged P50 and children are charged P30 each. Contact details are required.</p>
+
+				<div class="grid gap-4 md:grid-cols-2">
+					<div>
+						<label for="adults" class="mb-2 block text-sm font-medium text-slate-700">Adults</label>
+						<input type="number" id="adults" min="0" value="1" class="w-full rounded-lg border border-slate-300 p-2.5 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200">
+					</div>
+					<div>
+						<label for="children" class="mb-2 block text-sm font-medium text-slate-700">Children</label>
+						<input type="number" id="children" min="0" value="0" class="w-full rounded-lg border border-slate-300 p-2.5 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200">
+					</div>
+				</div>
+
+				<p id="guestValidation" class="hidden text-sm text-rose-700"></p>
+
+				<div class="grid gap-4 md:grid-cols-2">
+					<div class="md:col-span-2">
+						<label for="fullName" class="mb-2 block text-sm font-medium text-slate-700">Full Name</label>
+						<input type="text" id="fullName" placeholder="Juan Dela Cruz" class="w-full rounded-lg border border-slate-300 p-2.5 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200">
+					</div>
+					<div>
+						<label for="email" class="mb-2 block text-sm font-medium text-slate-700">Email Address</label>
+						<input type="email" id="email" placeholder="name@example.com" class="w-full rounded-lg border border-slate-300 p-2.5 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200">
+					</div>
+					<div>
+						<label for="phone" class="mb-2 block text-sm font-medium text-slate-700">Phone Number</label>
+						<input type="tel" id="phone" placeholder="09XXXXXXXXX" class="w-full rounded-lg border border-slate-300 p-2.5 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200">
+					</div>
+				</div>
+			</div>
+
+			<div data-step-panel="4" class="hidden space-y-4">
+				<h2 class="text-xl font-semibold text-slate-900">Step 4: Summary and Submit</h2>
+				<p class="text-sm text-slate-600">Review all details before sending your booking request.</p>
+
+				<div class="grid gap-4 lg:grid-cols-2">
+					<div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+						<h3 class="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-600">Reservation Details</h3>
+						<dl class="space-y-2 text-sm">
+							<div class="flex items-center justify-between"><dt>Booked By</dt><dd id="summaryFullName">-</dd></div>
+							<div class="flex items-center justify-between"><dt>Email</dt><dd id="summaryEmail">-</dd></div>
+							<div class="flex items-center justify-between"><dt>Phone</dt><dd id="summaryPhone">-</dd></div>
+							<div class="flex items-center justify-between"><dt>Date</dt><dd id="summaryDate">-</dd></div>
+							<div class="flex items-center justify-between"><dt>Expected Arrival</dt><dd id="summaryArrivalTime">-</dd></div>
+							<div class="flex items-center justify-between"><dt>Cottage</dt><dd id="summaryCottage">-</dd></div>
+							<div class="flex items-center justify-between"><dt>Adults</dt><dd id="summaryAdults">0</dd></div>
+							<div class="flex items-center justify-between"><dt>Children</dt><dd id="summaryChildren">0</dd></div>
+						</dl>
+						<p class="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Your booking is held for 30 minutes after your selected arrival time. Failure to arrive may result in automatic cancellation.</p>
+					</div>
+
+					<div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+						<h3 class="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-600">Pricing Breakdown</h3>
+						<dl class="space-y-2 text-sm">
+							<div class="flex items-center justify-between"><dt>Cottage Price</dt><dd>P<span id="cottagePrice">0</span></dd></div>
+							<div class="flex items-center justify-between"><dt>Adults (P50 x n)</dt><dd>P<span id="adultsSubtotal">0</span></dd></div>
+							<div class="flex items-center justify-between"><dt>Children (P30 x n)</dt><dd>P<span id="childrenSubtotal">0</span></dd></div>
+							<div class="flex items-center justify-between"><dt>Entrance Total</dt><dd>P<span id="entranceTotal">0</span></dd></div>
+							<div class="mt-2 flex items-center justify-between border-t border-slate-300 pt-2 text-base font-semibold"><dt>Final Total</dt><dd>P<span id="finalTotal">0</span></dd></div>
+						</dl>
+					</div>
+				</div>
+			</div>
+
+			<div class="flex flex-col gap-3 border-t border-slate-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
+				<button type="button" id="backBtn" class="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">
+					<span aria-hidden="true">&larr;</span>
+					<span>Back</span>
+				</button>
+				<div class="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
+					<button type="button" id="nextBtn" class="w-full rounded-xl bg-gradient-to-r from-teal-600 to-teal-500 px-6 py-2.5 text-sm font-semibold text-white shadow-md transition duration-200 hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">Next</button>
+					<button type="submit" id="submitBtn" class="hidden w-full rounded-xl bg-emerald-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">Submit Booking</button>
+				</div>
+			</div>
+		</form>
+	</section>
+</main>
+
+<script>
+const ADULT_FEE = 50;
+const CHILD_FEE = 30;
+const DEFAULT_GRACE_PERIOD_MINUTES = 30;
+const OPERATING_HOURS_START = '09:00';
+const OPERATING_HOURS_END = '17:00';
+const STORAGE_KEY = 'bookingWizardState';
+
+const state = {
+	currentStep: 1,
+	date: '',
+	arrivalTime: OPERATING_HOURS_START,
+	gracePeriodMinutes: DEFAULT_GRACE_PERIOD_MINUTES,
+	selectedCottageId: null,
+	selectedCottageName: '',
+	cottagePrice: 0,
+	adults: 1,
+	children: 0,
+	fullName: '',
+	email: '',
+	phone: '',
+	availableCottageIds: [],
+	cottages: [],
+};
+
+const refs = {
+	globalStatus: document.getElementById('globalStatus'),
+	bookingLoaderOverlay: document.getElementById('bookingLoaderOverlay'),
+	panels: Array.from(document.querySelectorAll('[data-step-panel]')),
+	progress: document.getElementById('progressSteps'),
+	date: document.getElementById('date'),
+	arrivalTime: document.getElementById('arrivalTime'),
+	dateAvailability: document.getElementById('dateAvailability'),
+	selectedCottageHint: document.getElementById('selectedCottageHint'),
+	cottages: document.getElementById('cottages'),
+	adults: document.getElementById('adults'),
+	children: document.getElementById('children'),
+	fullName: document.getElementById('fullName'),
+	email: document.getElementById('email'),
+	phone: document.getElementById('phone'),
+	guestValidation: document.getElementById('guestValidation'),
+	dateValidation: document.getElementById('dateValidation'),
+	summaryFullName: document.getElementById('summaryFullName'),
+	summaryEmail: document.getElementById('summaryEmail'),
+	summaryPhone: document.getElementById('summaryPhone'),
+	summaryDate: document.getElementById('summaryDate'),
+	summaryArrivalTime: document.getElementById('summaryArrivalTime'),
+	summaryCottage: document.getElementById('summaryCottage'),
+	summaryAdults: document.getElementById('summaryAdults'),
+	summaryChildren: document.getElementById('summaryChildren'),
+	cottagePrice: document.getElementById('cottagePrice'),
+	adultsSubtotal: document.getElementById('adultsSubtotal'),
+	childrenSubtotal: document.getElementById('childrenSubtotal'),
+	entranceTotal: document.getElementById('entranceTotal'),
+	finalTotal: document.getElementById('finalTotal'),
+	backBtn: document.getElementById('backBtn'),
+	nextBtn: document.getElementById('nextBtn'),
+	submitBtn: document.getElementById('submitBtn'),
+	form: document.getElementById('bookingWizard'),
+};
+
+function setSubmittingLoader(visible) {
+	refs.bookingLoaderOverlay.classList.toggle('hidden', !visible);
+	refs.bookingLoaderOverlay.setAttribute('aria-busy', visible ? 'true' : 'false');
+	document.body.style.overflow = visible ? 'hidden' : '';
+}
+
+const stepTitles = [
+	'Select Date',
+	'Choose Cottage',
+	'Guest & Contact',
+	'Summary',
+];
+
+const stepIcons = ['&#128197;', '&#127968;', '&#128100;', '&#128196;'];
+
+function setGlobalStatus(message, type = 'info') {
+	refs.globalStatus.classList.remove('hidden', 'bg-rose-100', 'text-rose-700', 'bg-emerald-100', 'text-emerald-700', 'bg-sky-100', 'text-sky-700');
+	if (type === 'error') {
+		refs.globalStatus.classList.add('bg-rose-100', 'text-rose-700');
+	} else if (type === 'success') {
+		refs.globalStatus.classList.add('bg-emerald-100', 'text-emerald-700');
+	} else {
+		refs.globalStatus.classList.add('bg-sky-100', 'text-sky-700');
+	}
+	refs.globalStatus.textContent = message;
+}
+
+function clearGlobalStatus() {
+	refs.globalStatus.classList.add('hidden');
+	refs.globalStatus.textContent = '';
+}
+
+function saveState() {
+	localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function loadState() {
+	const raw = localStorage.getItem(STORAGE_KEY);
+	if (!raw) {
+		return;
+	}
+
+	try {
+		const parsed = JSON.parse(raw);
+		state.date = parsed.date || '';
+		state.arrivalTime = parsed.arrivalTime || OPERATING_HOURS_START;
+		state.gracePeriodMinutes = Number(parsed.gracePeriodMinutes || DEFAULT_GRACE_PERIOD_MINUTES);
+		state.selectedCottageId = parsed.selectedCottageId || null;
+		state.selectedCottageName = parsed.selectedCottageName || '';
+		state.cottagePrice = Number(parsed.cottagePrice || 0);
+		state.adults = Number(parsed.adults ?? 1);
+		state.children = Number(parsed.children ?? 0);
+		state.fullName = parsed.fullName || '';
+		state.email = parsed.email || '';
+		state.phone = parsed.phone || '';
+	} catch (_) {
+		localStorage.removeItem(STORAGE_KEY);
+	}
+}
+
+function isValidEmail(value) {
+	return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function isValidPhone(value) {
+	return /^\+?[0-9\s()\-]{7,20}$/.test(value);
+}
+
+function normalizeId(value) {
+	if (value === null || value === undefined) {
+		return '';
+	}
+	return String(value).trim().toLowerCase();
+}
+
+function getCottageId(cottage) {
+	return normalizeId(cottage?.id || cottage?.cottage_id || cottage?.uuid);
+}
+
+async function parseApiResponse(response) {
+	const contentType = response.headers.get('content-type') || '';
+	if (contentType.includes('application/json')) {
+		return response.json();
+	}
+	const text = await response.text();
+	return { error: 'Unexpected server response', reason: text.slice(0, 180) };
+}
+
+function renderProgress() {
+	refs.progress.innerHTML = '';
+	stepTitles.forEach((title, index) => {
+		const stepNumber = index + 1;
+		const active = stepNumber === state.currentStep;
+		const done = stepNumber < state.currentStep;
+
+		const item = document.createElement('li');
+		item.className = 'relative min-w-[170px] snap-start rounded-2xl border px-4 py-3 shadow-sm transition-all duration-300 md:min-w-0';
+		if (active) {
+			item.classList.add('border-teal-600', 'bg-gradient-to-r', 'from-teal-600', 'to-teal-500', 'text-white', 'shadow-md');
+		} else if (done) {
+			item.classList.add('border-teal-200', 'bg-teal-50', 'text-teal-800');
+		} else {
+			item.classList.add('border-slate-200', 'bg-slate-100', 'text-slate-500');
+		}
+
+		item.innerHTML =
+			'<div class="mb-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/20 text-sm font-bold ' + (active ? 'text-white' : 'bg-white text-slate-500') + '">' + stepNumber + '</div>' +
+			'<p class="text-xs font-semibold uppercase tracking-wide">Step ' + stepNumber + '</p>' +
+			'<p class="mt-1 flex items-center gap-2 text-sm font-medium"><span aria-hidden="true">' + stepIcons[index] + '</span><span>' + title + '</span></p>';
+		refs.progress.appendChild(item);
+	});
+}
+
+function getTodayDateString() {
+	const now = new Date();
+	const year = now.getFullYear();
+	const month = String(now.getMonth() + 1).padStart(2, '0');
+	const day = String(now.getDate()).padStart(2, '0');
+	return year + '-' + month + '-' + day;
+}
+
+function validateDateSelection(showMessage = false) {
+	refs.dateValidation.classList.add('hidden');
+
+	if (!state.date) {
+		if (showMessage) {
+			refs.dateValidation.textContent = 'Please select a date to continue.';
+			refs.dateValidation.classList.remove('hidden');
+		}
+		return false;
+	}
+
+	if (state.date < getTodayDateString()) {
+		refs.dateValidation.textContent = 'Past dates are not allowed. Please choose today or a future date.';
+		refs.dateValidation.classList.remove('hidden');
+		return false;
+	}
+
+	return true;
+}
+
+function validateArrivalTime(showMessage = false) {
+	const value = (state.arrivalTime || '').trim();
+	if (!value) {
+		if (showMessage) {
+			setGlobalStatus('Please select an expected arrival time.', 'error');
+		}
+		return false;
+	}
+
+	if (value < OPERATING_HOURS_START || value > OPERATING_HOURS_END) {
+		if (showMessage) {
+			setGlobalStatus('Arrival time must be within operating hours (09:00 to 17:00).', 'error');
+		}
+		return false;
+	}
+
+	return true;
+}
+
+function updateStepOneActions() {
+	if (state.currentStep !== 1) {
+		return;
+	}
+
+	const hasValidDate = validateDateSelection(false);
+	const hasValidArrival = validateArrivalTime(false);
+	const canContinue = hasValidDate && hasValidArrival && state.availableCottageIds.length > 0;
+	refs.nextBtn.disabled = !canContinue;
+}
+
+function renderPanels() {
+	refs.panels.forEach((panel) => {
+		const step = Number(panel.getAttribute('data-step-panel'));
+		panel.classList.toggle('hidden', step !== state.currentStep);
+	});
+
+	refs.backBtn.disabled = state.currentStep === 1;
+	refs.nextBtn.classList.toggle('hidden', state.currentStep === 4);
+	refs.submitBtn.classList.toggle('hidden', state.currentStep !== 4);
+	if (state.currentStep === 1) {
+		updateStepOneActions();
+	}
+}
+
+function updatePricingSummary() {
+	const adultsSubtotal = state.adults * ADULT_FEE;
+	const childrenSubtotal = state.children * CHILD_FEE;
+	const entranceTotal = adultsSubtotal + childrenSubtotal;
+	const finalTotal = state.cottagePrice + entranceTotal;
+
+	refs.summaryDate.textContent = state.date || '-';
+	refs.summaryArrivalTime.textContent = state.arrivalTime || '-';
+	refs.summaryFullName.textContent = state.fullName || '-';
+	refs.summaryEmail.textContent = state.email || '-';
+	refs.summaryPhone.textContent = state.phone || '-';
+	refs.summaryCottage.textContent = state.selectedCottageName || '-';
+	refs.summaryAdults.textContent = String(state.adults);
+	refs.summaryChildren.textContent = String(state.children);
+	refs.cottagePrice.textContent = String(state.cottagePrice);
+	refs.adultsSubtotal.textContent = String(adultsSubtotal);
+	refs.childrenSubtotal.textContent = String(childrenSubtotal);
+	refs.entranceTotal.textContent = String(entranceTotal);
+	refs.finalTotal.textContent = String(finalTotal);
+}
+
+function renderCottages() {
+	refs.cottages.innerHTML = '';
+
+	const allowed = new Set(state.availableCottageIds.map((id) => normalizeId(id)).filter(Boolean));
+	const available = state.cottages.filter((cottage) => allowed.has(getCottageId(cottage)));
+
+	refs.selectedCottageHint.textContent = state.selectedCottageName
+		? 'Selected cottage: ' + state.selectedCottageName
+		: 'Selected cottage: None';
+
+	if (!available.length) {
+		refs.cottages.innerHTML = '<p class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">No available cottages for this date. Pick another date.</p>';
+		refs.selectedCottageHint.textContent = 'Selected cottage: None';
+		return;
+	}
+
+	available.forEach((cottage) => {
+		const cottageId = getCottageId(cottage);
+		if (!cottageId) {
+			return;
+		}
+
+		const card = document.createElement('button');
+		card.type = 'button';
+		card.dataset.cottageId = cottageId;
+		card.className = 'cursor-pointer rounded-xl border border-slate-200 bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-sky-300 hover:shadow';
+		if (normalizeId(state.selectedCottageId) === cottageId) {
+			card.classList.add('border-sky-500', 'ring-2', 'ring-sky-200');
+		}
+
+		card.innerHTML = '<h3 class="font-semibold text-slate-900">' + cottage.name + '</h3>' +
+			'<p class="mt-1 text-sm text-slate-600">Capacity: ' + cottage.capacity + '</p>' +
+			'<p class="mt-2 text-sm font-semibold text-slate-800">P' + Number(cottage.price || 0) + '</p>';
+
+		refs.cottages.appendChild(card);
+	});
+}
+
+async function loadCottages() {
+	const response = await fetch('/api/cottages');
+	const data = await parseApiResponse(response);
+	if (!response.ok || !Array.isArray(data)) {
+		throw new Error(data.error || data.reason || 'Failed to load cottages');
+	}
+	state.cottages = data;
+}
+
+async function checkDateAvailability() {
+	if (!state.date) {
+		refs.dateAvailability.innerHTML = '<p class="font-semibold">Availability Status</p><p class="mt-1">Select a date to check availability.</p>';
+		refs.dateAvailability.className = 'rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 transition-all duration-300';
+		updateStepOneActions();
+		return false;
+	}
+
+	if (!validateDateSelection(true)) {
+		refs.dateAvailability.innerHTML = '<p class="font-semibold">Availability Status</p><p class="mt-1">Choose a valid date first.</p>';
+		refs.dateAvailability.className = 'rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 transition-all duration-300';
+		state.availableCottageIds = [];
+		updateStepOneActions();
+		return false;
+	}
+
+	refs.dateAvailability.innerHTML = '<p class="font-semibold">Availability Status</p><p class="mt-1">Checking date availability...</p>';
+	refs.dateAvailability.className = 'rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-700 transition-all duration-300';
+
+	const response = await fetch('/api/date-availability', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ date: state.date }),
+	});
+
+	const data = await parseApiResponse(response);
+	if (!response.ok) {
+		refs.dateAvailability.innerHTML = '<p class="font-semibold">Availability Status</p><p class="mt-1">' + (data.error || data.reason || 'Date availability check failed.') + '</p>';
+		refs.dateAvailability.className = 'rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 transition-all duration-300';
+		updateStepOneActions();
+		return false;
+	}
+
+	state.availableCottageIds = Array.isArray(data.available_cottage_ids)
+		? data.available_cottage_ids.map((id) => normalizeId(id)).filter(Boolean)
+		: [];
+	const selectedId = normalizeId(state.selectedCottageId);
+	state.selectedCottageId = state.availableCottageIds.includes(selectedId) ? selectedId : null;
+	if (!state.selectedCottageId) {
+		state.selectedCottageName = '';
+		state.cottagePrice = 0;
+	}
+	saveState();
+
+	if (data.available) {
+		refs.dateAvailability.innerHTML = '<p class="font-semibold">Availability Status</p><p class="mt-1">&#127881; Good news! ' + data.available_cottages + ' of ' + data.total_cottages + ' cottages are available on ' + state.date + '.</p>';
+		refs.dateAvailability.className = 'rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700 transition-all duration-300';
+		updateStepOneActions();
+		return true;
+	}
+
+	refs.dateAvailability.innerHTML = '<p class="font-semibold">Availability Status</p><p class="mt-1">' + (data.reason || 'No cottages available for this date.') + '</p>';
+	refs.dateAvailability.className = 'rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 transition-all duration-300';
+	updateStepOneActions();
+	return false;
+}
+
+function validateStep(step) {
+	if (step === 1) {
+		if (!validateDateSelection(true)) {
+			setGlobalStatus('Please select a booking date first.', 'error');
+			return false;
+		}
+		if (!validateArrivalTime(true)) {
+			return false;
+		}
+		if (!state.availableCottageIds.length) {
+			setGlobalStatus('No cottages available for this date. Choose another date.', 'error');
+			return false;
+		}
+	}
+
+	if (step === 2) {
+		if (!state.selectedCottageId) {
+			setGlobalStatus('Please choose a cottage before continuing.', 'error');
+			return false;
+		}
+	}
+
+	if (step === 3) {
+		if (state.adults < 0 || state.children < 0) {
+			refs.guestValidation.textContent = 'Adults and children cannot be negative.';
+			refs.guestValidation.classList.remove('hidden');
+			setGlobalStatus('Fix guest details before continuing.', 'error');
+			return false;
+		}
+
+		if ((state.adults + state.children) <= 0) {
+			refs.guestValidation.textContent = 'At least one guest is required.';
+			refs.guestValidation.classList.remove('hidden');
+			setGlobalStatus('Fix guest details before continuing.', 'error');
+			return false;
+		}
+
+		if (!state.fullName.trim()) {
+			refs.guestValidation.textContent = 'Please enter the full name of the person booking.';
+			refs.guestValidation.classList.remove('hidden');
+			setGlobalStatus('Booking contact details are required.', 'error');
+			return false;
+		}
+
+		if (!isValidEmail(state.email.trim())) {
+			refs.guestValidation.textContent = 'Please provide a valid email address.';
+			refs.guestValidation.classList.remove('hidden');
+			setGlobalStatus('Booking contact details are required.', 'error');
+			return false;
+		}
+
+		if (!isValidPhone(state.phone.trim())) {
+			refs.guestValidation.textContent = 'Please provide a valid phone number.';
+			refs.guestValidation.classList.remove('hidden');
+			setGlobalStatus('Booking contact details are required.', 'error');
+			return false;
+		}
+
+		refs.guestValidation.classList.add('hidden');
+	}
+
+	return true;
+}
+
+async function goToStep(step) {
+	state.currentStep = step;
+	renderProgress();
+	renderPanels();
+	updatePricingSummary();
+	if (step === 2) {
+		renderCottages();
+	}
+	if (step === 4) {
+		updatePricingSummary();
+	}
+}
+
+async function submitBooking(event) {
+	event.preventDefault();
+	clearGlobalStatus();
+
+	if (!validateStep(3) || !validateStep(2) || !validateStep(1)) {
+		return;
+	}
+
+	refs.submitBtn.disabled = true;
+	refs.submitBtn.textContent = 'Submitting...';
+	setSubmittingLoader(true);
+
+	try {
+		const availabilityRes = await fetch('/api/check-availability', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				cottage_id: state.selectedCottageId,
+				date: state.date,
+				adults: state.adults,
+				children: state.children,
+			}),
+		});
+
+		const availabilityData = await parseApiResponse(availabilityRes);
+		if (!availabilityRes.ok || !availabilityData.available) {
+			setGlobalStatus(availabilityData.error || availabilityData.reason || 'Selected slot is not available.', 'error');
+			return;
+		}
+
+		const bookingRes = await fetch('/api/book', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				cottage_id: state.selectedCottageId,
+				date: state.date,
+				arrival_time: state.arrivalTime,
+				grace_period_minutes: state.gracePeriodMinutes,
+				adults: state.adults,
+				children: state.children,
+				full_name: state.fullName.trim(),
+				email: state.email.trim(),
+				phone: state.phone.trim(),
+			}),
+		});
+
+		const bookingData = await parseApiResponse(bookingRes);
+		if (!bookingRes.ok) {
+			setGlobalStatus(bookingData.error || bookingData.reason || 'Booking failed.', 'error');
+			return;
+		}
+
+		setGlobalStatus(bookingData.message || 'Booking submitted successfully.', 'success');
+		localStorage.removeItem(STORAGE_KEY);
+	} catch (_) {
+		setGlobalStatus('Network error while submitting booking.', 'error');
+	} finally {
+		setSubmittingLoader(false);
+		refs.submitBtn.disabled = false;
+		refs.submitBtn.textContent = 'Submit Booking';
+	}
+}
+
+refs.date.addEventListener('change', async () => {
+	state.date = refs.date.value;
+	state.selectedCottageId = null;
+	state.selectedCottageName = '';
+	state.cottagePrice = 0;
+	clearGlobalStatus();
+	saveState();
+	validateDateSelection(false);
+	await checkDateAvailability();
+	renderCottages();
+	updatePricingSummary();
+});
+
+refs.arrivalTime.addEventListener('change', () => {
+	state.arrivalTime = refs.arrivalTime.value;
+	clearGlobalStatus();
+	saveState();
+	updatePricingSummary();
+});
+
+refs.adults.addEventListener('input', () => {
+	state.adults = Number(refs.adults.value || 0);
+	refs.guestValidation.classList.add('hidden');
+	saveState();
+	updatePricingSummary();
+});
+
+refs.children.addEventListener('input', () => {
+	state.children = Number(refs.children.value || 0);
+	refs.guestValidation.classList.add('hidden');
+	saveState();
+	updatePricingSummary();
+});
+
+refs.fullName.addEventListener('input', () => {
+	state.fullName = refs.fullName.value;
+	refs.guestValidation.classList.add('hidden');
+	saveState();
+	updatePricingSummary();
+});
+
+refs.email.addEventListener('input', () => {
+	state.email = refs.email.value;
+	refs.guestValidation.classList.add('hidden');
+	saveState();
+	updatePricingSummary();
+});
+
+refs.phone.addEventListener('input', () => {
+	state.phone = refs.phone.value;
+	refs.guestValidation.classList.add('hidden');
+	saveState();
+	updatePricingSummary();
+});
+
+refs.cottages.addEventListener('click', (event) => {
+	const card = event.target.closest('button[data-cottage-id]');
+	if (!card) {
+		return;
+	}
+
+	const clickedId = normalizeId(card.dataset.cottageId);
+	const selected = state.cottages.find((cottage) => getCottageId(cottage) === clickedId);
+	if (!selected) {
+		setGlobalStatus('Unable to select cottage. Please refresh and try again.', 'error');
+		return;
+	}
+
+	state.selectedCottageId = clickedId;
+	state.selectedCottageName = selected.name || 'Selected Cottage';
+	state.cottagePrice = Number(selected.price || 0);
+	saveState();
+	renderCottages();
+	updatePricingSummary();
+	clearGlobalStatus();
+});
+
+refs.backBtn.addEventListener('click', async () => {
+	clearGlobalStatus();
+	if (state.currentStep > 1) {
+		await goToStep(state.currentStep - 1);
+	}
+});
+
+refs.nextBtn.addEventListener('click', async () => {
+	clearGlobalStatus();
+	if (!validateStep(state.currentStep)) {
+		return;
+	}
+	if (state.currentStep < 4) {
+		await goToStep(state.currentStep + 1);
+	}
+});
+
+refs.form.addEventListener('submit', submitBooking);
+
+async function init() {
+	loadState();
+	refs.date.value = state.date;
+	refs.arrivalTime.value = state.arrivalTime;
+	refs.date.setAttribute('min', getTodayDateString());
+	refs.adults.value = String(state.adults);
+	refs.children.value = String(state.children);
+	refs.fullName.value = state.fullName;
+	refs.email.value = state.email;
+	refs.phone.value = state.phone;
+
+	try {
+		await loadCottages();
+		if (state.date) {
+			await checkDateAvailability();
+		}
+		renderCottages();
+	} catch (error) {
+		setGlobalStatus(error.message || 'Failed to initialize booking page.', 'error');
+	}
+
+	updatePricingSummary();
+	await goToStep(1);
+	updateStepOneActions();
+}
+
+init();
+</script>
+</body>
+</html>

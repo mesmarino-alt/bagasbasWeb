@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Scanner</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/html5-qrcode" defer></script>
+</head>
+<body
+    class="min-h-screen bg-slate-950 text-slate-100"
+    data-scanner-api-key="{{ scanner_api_key|default('bagasbas-scanner-key', true) }}"
+    data-scanner-admin-id="{{ scanner_admin_id|default('scanner-device', true) }}"
+    data-supabase-url="{{ supabase_url|default('', true) }}"
+    data-supabase-anon-key="{{ supabase_anon_key|default('', true) }}"
+>
+<main class="mx-auto flex min-h-screen w-full max-w-xl flex-col px-4 pb-6 pt-4">
+    <header class="mb-4 flex items-center justify-between">
+        <div>
+            <h1 class="text-xl font-bold">Entrance Scanner</h1>
+            <p class="text-xs text-slate-300">Scan on arrival, scan again on exit for checkout.</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <a href="/admin" class="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800">Back</a>
+            <button id="logoutBtn" class="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800">Logout</button>
+        </div>
+    </header>
+
+    <section class="rounded-2xl border border-slate-800 bg-slate-900 p-3 shadow-xl">
+        <div id="qrReader" class="overflow-hidden rounded-xl border border-slate-700 bg-black"></div>
+        <p id="scannerHint" class="mt-2 text-xs text-slate-300">Allow camera permission. Use rear camera for best results.</p>
+        <button id="startCameraBtn" class="mt-2 w-full rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500">Start Camera</button>
+    </section>
+
+    <section class="mt-4 rounded-2xl border border-slate-800 bg-slate-900 p-3">
+        <label for="manualPayload" class="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-400">Manual QR Payload / Booking ID</label>
+        <div class="flex gap-2">
+            <input id="manualPayload" type="text" placeholder='{"booking_id":"...","date":"YYYY-MM-DD","checksum":"..."}' class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none">
+            <button id="manualValidateBtn" class="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500">Scan</button>
+        </div>
+        <button id="forceAllowBtn" class="mt-2 w-full rounded-lg border border-amber-500 bg-slate-950 px-3 py-2 text-sm font-semibold text-amber-300 hover:bg-amber-950/40">Force Allow / Override</button>
+    </section>
+
+    <section id="scanResultCard" class="mt-4 hidden rounded-2xl border border-slate-700 bg-slate-900 p-4">
+        <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Result</p>
+        <p id="scanStatusText" class="mt-2 text-2xl font-black">-</p>
+        <p id="scanMessageText" class="mt-1 text-sm text-slate-300">-</p>
+        <div class="mt-3 space-y-1 text-xs text-slate-300">
+            <p><span class="font-semibold text-slate-200">Booking:</span> <span id="scanBookingId">-</span></p>
+            <p><span class="font-semibold text-slate-200">Name:</span> <span id="scanBookingName">-</span></p>
+            <p><span class="font-semibold text-slate-200">Date:</span> <span id="scanBookingDate">-</span></p>
+            <p><span class="font-semibold text-slate-200">Status:</span> <span id="scanBookingStatus">-</span></p>
+        </div>
+    </section>
+
+    <p id="toast" class="mt-4 hidden rounded-xl px-3 py-2 text-center text-xs font-semibold"></p>
+</main>
+
+<script>
+const TOKEN_KEY = 'access_token';
+const SCANNER_API_KEY = document.body.dataset.scannerApiKey || 'bagasbas-scanner-key';
+const SCANNER_ADMIN_ID = document.body.dataset.scannerAdminId || 'scanner-device';
+const SUPABASE_URL = document.body.dataset.supabaseUrl || '';
+const SUPABASE_ANON_KEY = document.body.dataset.supabaseAnonKey || '';
+const supabaseClient = (window.supabase && SUPABASE_URL && SUPABASE_ANON_KEY)
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+    : null;
+
+function getAccessToken() {
+    return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY) || '';
+}
+
+function clearAccessToken() {
+    localStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(TOKEN_KEY);
+}
+
+function shouldAttachAuth(input) {
+    if (typeof input === 'string') {
+        return input.startsWith('/') || input.startsWith(window.location.origin);
+    }
+
+    if (typeof Request !== 'undefined' && input instanceof Request) {
+        return String(input.url || '').startsWith(window.location.origin);
+    }
+
+    return true;
+}
+
+const nativeFetch = window.fetch.bind(window);
+window.fetch = async (...args) => {
+    const input = args[0];
+    const init = args[1] || {};
+    const headers = new Headers(init.headers || {});
+
+    if (shouldAttachAuth(input)) {
+        const token = getAccessToken();
+        if (token && !headers.has('Authorization')) {
+            headers.set('Authorization', 'Bearer ' + token);
+        }
+    }
+
+    const response = await nativeFetch(input, { ...init, headers });
+    if (response.status === 401) {
+        clearAccessToken();
+        window.location.replace('/admin/login');
+    }
+    return response;
+};
+
+const authState = {
+    adminId: SCANNER_ADMIN_ID,
+    role: '',
+};
+
+const refs = {
+    qrReader: document.getElementById('qrReader'),
+    scannerHint: document.getElementById('scannerHint'),
+    manualPayload: document.getElementById('manualPayload'),
+    manualValidateBtn: document.getElementById('manualValidateBtn'),
+    startCameraBtn: document.getElementById('startCameraBtn'),
+    forceAllowBtn: document.getElementById('forceAllowBtn'),
+    logoutBtn: document.getElementById('logoutBtn'),
+    scanResultCard: document.getElementById('scanResultCard'),
+    scanStatusText: document.getElementById('scanStatusText'),
+    scanMessageText: document.getElementById('scanMessageText'),
+    scanBookingId: document.getElementById('scanBookingId'),
+    scanBookingName: document.getElementById('scanBookingName'),
+    scanBookingDate: document.getElementById('scanBookingDate'),
+    scanBookingStatus: document.getElementById('scanBookingStatus'),
+    toast: document.getElementById('toast'),
+};
+
+const state = {
+    scanner: null,
+    active: false,
+    busy: false,
+    lastScannedText: '',
+    currentBookingId: '',
+};
+
+function showToast(message, type = 'info') {
+    refs.toast.className = 'mt-4 rounded-xl px-3 py-2 text-center text-xs font-semibold';
+    if (type === 'error') {
+        refs.toast.classList.add('bg-rose-200', 'text-rose-800');
+    } else {
+        refs.toast.classList.add('bg-emerald-200', 'text-emerald-800');
+    }
+    refs.toast.textContent = message;
+    refs.toast.classList.remove('hidden');
+    setTimeout(() => refs.toast.classList.add('hidden'), 2200);
+}
+
+function getAdminId() {
+    return authState.adminId || SCANNER_ADMIN_ID;
+}
+
+async function ensureAdminSession() {
+    const token = getAccessToken();
+    if (!token) {
+        window.location.replace('/admin/login');
+        return false;
+    }
+
+    const response = await fetch('/api/admin/me');
+    if (response.status === 401) {
+        clearAccessToken();
+        window.location.replace('/admin/login');
+        return false;
+    }
+
+    const data = await response.json();
+    if (!response.ok || !data.admin) {
+        throw new Error(data.error || 'Unable to verify session');
+    }
+
+    authState.adminId = data.admin.id || SCANNER_ADMIN_ID;
+    authState.role = data.admin.role || '';
+    return true;
+}
+
+async function logoutAdmin() {
+    try {
+        if (supabaseClient) {
+            await supabaseClient.auth.signOut();
+        }
+    } catch (error) {
+    } finally {
+        clearAccessToken();
+        window.location.replace('/admin/login');
+    }
+}
+
+function parseBookingIdFromScan(raw) {
+    const value = String(raw || '').trim();
+    if (!value) {
+        return '';
+    }
+
+    try {
+        const payload = JSON.parse(value);
+        return String(payload.booking_id || '').trim();
+    } catch (error) {
+        return value;
+    }
+}
+
+function renderScanResult(data) {
+    const status = String(data.status || 'INVALID').toUpperCase();
+    const booking = data.booking || {};
+    state.currentBookingId = booking.id || '';
+
+    refs.scanResultCard.classList.remove('hidden');
+    refs.scanStatusText.textContent = status;
+    refs.scanMessageText.textContent = data.message || '-';
+    refs.scanBookingId.textContent = booking.id || '-';
+    refs.scanBookingName.textContent = booking.full_name || '-';
+    refs.scanBookingDate.textContent = booking.date || '-';
+    refs.scanBookingStatus.textContent = booking.status || '-';
+
+    refs.scanResultCard.className = 'mt-4 rounded-2xl border p-4';
+    if (status === 'VALID' || status === 'CHECKED_OUT') {
+        refs.scanResultCard.classList.add('border-emerald-500', 'bg-emerald-950/40');
+    } else if (status === 'LATE' || status === 'ALREADY_CHECKED_OUT') {
+        refs.scanResultCard.classList.add('border-amber-500', 'bg-amber-950/40');
+    } else {
+        refs.scanResultCard.classList.add('border-rose-500', 'bg-rose-950/40');
+    }
+}
+
+async function callScanApi(payload) {
+    const response = await fetch('/api/scan', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Scanner-Key': SCANNER_API_KEY,
+            'X-Admin-Id': getAdminId(),
+        },
+        body: JSON.stringify(payload),
+    });
+    return { response, data: await response.json() };
+}
+
+async function validateScannedText(scannedText, notify = true) {
+    if (!scannedText || state.busy) {
+        return;
+    }
+
+    state.busy = true;
+    try {
+        const { response, data } = await callScanApi({ scan_data: scannedText, admin_id: getAdminId() });
+        renderScanResult(data);
+        if (notify) {
+            const ok = response.ok;
+            const msg = ok ? (data.status === 'CHECKED_OUT' ? 'Check-out accepted' : 'Check-in accepted') : (data.message || data.error || 'Scan failed');
+            showToast(msg, ok ? 'success' : 'error');
+        }
+    } catch (error) {
+        showToast('Scan request failed', 'error');
+    } finally {
+        state.busy = false;
+    }
+}
+
+async function forceAllow() {
+    const raw = refs.manualPayload.value.trim();
+    const bookingId = state.currentBookingId || parseBookingIdFromScan(raw);
+    if (!bookingId) {
+        showToast('Provide booking ID or payload first', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/admin/scan/force-allow', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Scanner-Key': SCANNER_API_KEY,
+                'X-Admin-Id': getAdminId(),
+            },
+            body: JSON.stringify({ booking_id: bookingId, admin_id: getAdminId() }),
+        });
+        const data = await response.json();
+        renderScanResult(data);
+        showToast(response.ok ? 'Override applied' : (data.error || data.message || 'Override failed'), response.ok ? 'success' : 'error');
+    } catch (error) {
+        showToast('Override request failed', 'error');
+    }
+}
+
+async function onDecodedScan(decodedText) {
+    if (!decodedText || decodedText === state.lastScannedText) {
+        return;
+    }
+    state.lastScannedText = decodedText;
+    await validateScannedText(decodedText, true);
+}
+
+function appendScript(src) {
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.async = true;
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+    });
+}
+
+async function ensureScannerLibrary() {
+    if (typeof Html5Qrcode !== 'undefined') {
+        return true;
+    }
+
+    refs.scannerHint.textContent = 'Loading scanner library...';
+
+    try {
+        await appendScript('https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/minified/html5-qrcode.min.js');
+    } catch (error) {
+    }
+
+    if (typeof Html5Qrcode === 'undefined') {
+        refs.scannerHint.textContent = 'Scanner library failed to load. Check network and reload.';
+        return false;
+    }
+
+    return true;
+}
+
+async function startScanner() {
+    if (state.active) {
+        return;
+    }
+
+    if (!window.isSecureContext && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        refs.scannerHint.textContent = 'Camera requires HTTPS on mobile. Open this page via https://... (or localhost).';
+        return;
+    }
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        refs.scannerHint.textContent = 'This browser does not support camera access. Use Chrome/Safari mobile.';
+        return;
+    }
+
+    const hasLibrary = await ensureScannerLibrary();
+    if (!hasLibrary) {
+        return;
+    }
+
+    try {
+        refs.startCameraBtn.disabled = true;
+        refs.startCameraBtn.textContent = 'Starting...';
+        state.scanner = state.scanner || new Html5Qrcode('qrReader');
+
+        // Try to warm up permission flow to avoid silent failures on mobile browsers.
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+            stream.getTracks().forEach((track) => track.stop());
+        } catch (permErr) {
+            const reason = (permErr && permErr.name) ? permErr.name : 'Permission denied';
+            refs.scannerHint.textContent = 'Camera permission failed: ' + reason + '. Allow camera access in browser settings.';
+            refs.startCameraBtn.disabled = false;
+            refs.startCameraBtn.textContent = 'Retry Camera';
+            return;
+        }
+
+        await state.scanner.start(
+            { facingMode: 'environment' },
+            { fps: 10, qrbox: { width: 240, height: 240 } },
+            (decodedText) => onDecodedScan(decodedText),
+            () => {}
+        );
+        state.active = true;
+        refs.scannerHint.textContent = 'Camera active. Point at QR token.';
+        refs.startCameraBtn.classList.add('hidden');
+    } catch (error) {
+        const reason = (error && error.message) ? error.message : 'Unknown camera error';
+        refs.scannerHint.textContent = 'Camera unavailable: ' + reason + '. Use manual payload input.';
+        refs.startCameraBtn.disabled = false;
+        refs.startCameraBtn.textContent = 'Retry Camera';
+    }
+}
+
+refs.manualValidateBtn.addEventListener('click', async () => {
+    await validateScannedText(refs.manualPayload.value, true);
+});
+
+refs.manualPayload.addEventListener('keydown', async (event) => {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        await validateScannedText(refs.manualPayload.value, true);
+    }
+});
+
+refs.forceAllowBtn.addEventListener('click', forceAllow);
+refs.startCameraBtn.addEventListener('click', () => {
+    startScanner();
+});
+refs.logoutBtn.addEventListener('click', async () => {
+    await logoutAdmin();
+});
+
+window.addEventListener('load', () => {
+    if (!supabaseClient) {
+        showToast('Missing SUPABASE_URL or SUPABASE_ANON_KEY in environment.', 'error');
+        return;
+    }
+
+    ensureAdminSession()
+        .then((ok) => {
+            if (ok) {
+                refs.scannerHint.textContent = 'Tap "Start Camera" and allow permission when prompted.';
+            }
+        })
+        .catch((error) => {
+            showToast(error.message || 'Session check failed', 'error');
+        });
+});
+</script>
+</body>
+</html>

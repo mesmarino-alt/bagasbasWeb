@@ -1,0 +1,4070 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://unpkg.com/html5-qrcode" defer></script>
+<style>
+.cms-loader-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(3px);
+}
+
+.cms-loader-overlay.hidden {
+    display: none;
+}
+
+.cms-loader-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    padding: 20px 24px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 18px 45px rgba(15, 23, 42, 0.25);
+    min-width: 190px;
+}
+
+.cms-loader-text {
+    font-size: 14px;
+    font-weight: 600;
+    color: #334155;
+}
+
+.cms-loading {
+    --speed-of-animation: 0.9s;
+    --gap: 6px;
+    --first-color: #4c86f9;
+    --second-color: #49a84c;
+    --third-color: #f6bb02;
+    --fourth-color: #f6bb02;
+    --fifth-color: #2196f3;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100px;
+    gap: var(--gap);
+    height: 100px;
+}
+
+.cms-loading span {
+    width: 4px;
+    height: 50px;
+    background: var(--first-color);
+    animation: cms-scale var(--speed-of-animation) ease-in-out infinite;
+}
+
+.cms-loading span:nth-child(2) {
+    background: var(--second-color);
+    animation-delay: -0.8s;
+}
+
+.cms-loading span:nth-child(3) {
+    background: var(--third-color);
+    animation-delay: -0.7s;
+}
+
+.cms-loading span:nth-child(4) {
+    background: var(--fourth-color);
+    animation-delay: -0.6s;
+}
+
+.cms-loading span:nth-child(5) {
+    background: var(--fifth-color);
+    animation-delay: -0.5s;
+}
+
+@keyframes cms-scale {
+    0%,
+    40%,
+    100% {
+        transform: scaleY(0.05);
+    }
+
+    20% {
+        transform: scaleY(1);
+    }
+}
+</style>
+</head>
+
+<body
+    class="min-h-screen bg-slate-100 text-slate-800"
+    data-scanner-api-key="{{ scanner_api_key|default('bagasbas-scanner-key', true) }}"
+    data-scanner-admin-id="{{ scanner_admin_id|default('scanner-device', true) }}"
+    data-supabase-url="{{ supabase_url|default('', true) }}"
+    data-supabase-anon-key="{{ supabase_anon_key|default('', true) }}"
+    data-booking-enabled="{{ 'true' if booking_enabled else 'false' }}"
+>
+<div class="flex h-screen overflow-hidden">
+    <aside class="hidden h-screen w-64 shrink-0 border-r border-slate-200 bg-white px-5 py-6 lg:block">
+        <div class="mb-8">
+            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Control Panel</p>
+            <h1 class="mt-2 text-xl font-bold text-slate-900">Bagasbas Admin</h1>
+        </div>
+        <nav class="space-y-2 text-sm">
+            <a id="sidebarDashboardLink" href="#" class="block rounded-lg bg-slate-900 px-3 py-2 font-medium text-white">Dashboard</a>
+            <a id="sidebarBookingsLink" href="#" class="block rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-100">Bookings</a>
+            <a id="sidebarCottagesLink" href="#" class="block rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-100">Cottages</a>
+            <a id="sidebarEventsLink" href="#" class="block rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-100">Events</a>
+            <a id="sidebarGalleryLink" href="#" class="block rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-100">Gallery</a>
+            <a id="sidebarInquiriesLink" href="#" class="block rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-100">Inquiries</a>
+            <a id="sidebarScannerLink" href="/admin/scanner" class="block rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-100">Scanner</a>
+            <a id="sidebarCapacityLink" href="#" class="block rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-100">Capacity</a>
+            <a id="sidebarReportsLink" href="#" class="block rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-100">Reports</a>
+        </nav>
+    </aside>
+
+    <main id="dashboard-overview" class="min-w-0 flex-1 overflow-y-auto px-4 py-5 md:px-7">
+        <div class="mb-4 grid grid-cols-3 gap-2 rounded-xl border border-slate-200 bg-white p-2 lg:hidden">
+            <button id="mobileDashboardLink" class="rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white">Dashboard</button>
+            <button id="mobileBookingsLink" class="rounded-lg px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100">Bookings</button>
+            <button id="mobileCottagesLink" class="rounded-lg px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100">Cottages</button>
+            <button id="mobileEventsLink" class="rounded-lg px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100">Events</button>
+            <button id="mobileGalleryLink" class="rounded-lg px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100">Gallery</button>
+            <button id="mobileInquiriesLink" class="rounded-lg px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100">Inquiries</button>
+            <button id="mobileScannerLink" class="rounded-lg px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100">Scanner</button>
+        </div>
+
+        <header class="mb-6 rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm md:px-5">
+            <div class="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <h2 id="pageTitle" class="text-2xl font-bold text-slate-900">Dashboard</h2>
+                        <span id="liveBadge" class="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">● Live</span>
+                    </div>
+                    <p id="dashboardDateContext" class="mt-2 text-sm font-semibold text-slate-700">Today • April 22, 2026</p>
+                    <p id="pageSubtitle" class="text-sm text-slate-500">Live overview of bookings, arrivals, and capacity.</p>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2 md:gap-3">
+                    <span id="systemModeBadge" class="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">CMS Mode (Booking Disabled)</span>
+                    <div id="dashboardHeaderControls" class="flex flex-wrap items-center gap-2">
+                        <div class="inline-flex rounded-xl border border-slate-300 bg-slate-50 p-1">
+                            <button id="periodTodayBtn" class="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm">Today</button>
+                            <button id="periodWeekBtn" class="rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-500">Week</button>
+                        </div>
+                        <button id="refreshDashboardBtn" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition-all duration-200 hover:bg-slate-100">Refresh</button>
+                        <button id="notifyBtn" class="rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-slate-500 transition-all duration-200 hover:bg-slate-100" aria-label="Notifications">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5m6 0a3 3 0 1 1-6 0m6 0H9"/>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <button id="toggleBookingBtn" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition-all duration-200 hover:bg-slate-100">Enable Booking</button>
+                    <span id="adminRoleBadge" class="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">Admin</span>
+                    <button id="logoutBtn" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition-all duration-200 hover:bg-slate-100">Logout</button>
+                </div>
+            </div>
+
+            <div id="dashboardQuickActions" class="mt-4 flex flex-wrap items-center gap-2">
+                <button id="quickNewBookingBtn" class="rounded-lg bg-sky-600 px-3 py-2 text-sm font-semibold text-white transition-all duration-200 hover:bg-sky-700">New Booking</button>
+                <button id="quickScannerBtn" class="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-700 transition-all duration-200 hover:bg-sky-100">Open Scanner</button>
+                <button id="quickCottagesBtn" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition-all duration-200 hover:bg-slate-100">Manage Cottages</button>
+            </div>
+        </header>
+
+        <section id="dashboardPage" class="mb-6 space-y-6">
+            <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <article class="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-4 shadow-sm transition-all duration-200 hover:shadow-md">
+                    <div class="flex items-start justify-between">
+                        <p id="metricTotalLabel" class="text-xs uppercase tracking-wider text-slate-500">Total Bookings</p>
+                        <span class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-sky-100 text-sky-600">📅</span>
+                    </div>
+                    <p id="metricTotal" class="mt-3 text-3xl font-bold text-slate-900">-</p>
+                    <div class="mt-2 flex items-center justify-between gap-2">
+                        <span id="metricTotalSubtext" class="text-xs text-slate-500">No data yet</span>
+                        <span id="metricTotalTrend" class="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600">--</span>
+                    </div>
+                </article>
+
+                <article class="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-amber-50/40 p-4 shadow-sm transition-all duration-200 hover:shadow-md">
+                    <div class="flex items-start justify-between">
+                        <p id="metricPendingLabel" class="text-xs uppercase tracking-wider text-slate-500">Pending</p>
+                        <span class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-amber-100 text-amber-600">⏳</span>
+                    </div>
+                    <p id="metricPending" class="mt-3 text-3xl font-bold text-amber-600">-</p>
+                    <div class="mt-2 flex items-center justify-between gap-2">
+                        <span id="metricPendingSubtext" class="text-xs text-slate-500">All cleared</span>
+                        <span id="metricPendingTrend" class="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600">--</span>
+                    </div>
+                </article>
+
+                <article class="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-emerald-50/40 p-4 shadow-sm transition-all duration-200 hover:shadow-md">
+                    <div class="flex items-start justify-between">
+                        <p id="metricConfirmedLabel" class="text-xs uppercase tracking-wider text-slate-500">Confirmed</p>
+                        <span class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">✅</span>
+                    </div>
+                    <p id="metricConfirmed" class="mt-3 text-3xl font-bold text-emerald-600">-</p>
+                    <div class="mt-2 flex items-center justify-between gap-2">
+                        <span id="metricConfirmedSubtext" class="text-xs text-slate-500">0% of total</span>
+                        <span id="metricConfirmedTrend" class="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600">--</span>
+                    </div>
+                </article>
+
+                <article class="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-4 shadow-sm transition-all duration-200 hover:shadow-md">
+                    <div class="flex items-start justify-between">
+                        <p id="metricCapacityLabel" class="text-xs uppercase tracking-wider text-slate-500">Capacity</p>
+                        <span class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-600">🏖️</span>
+                    </div>
+                    <p id="metricCapacity" class="mt-3 text-2xl font-bold text-slate-900">-</p>
+                    <div id="capacityBarWrap" class="mt-3 h-2 rounded-full bg-slate-200">
+                        <div id="capacityBar" class="h-2 rounded-full bg-emerald-500" style="width:0%"></div>
+                    </div>
+                    <p id="metricCapacitySubtext" class="mt-2 text-xs text-slate-500">No bookings yet today</p>
+                </article>
+            </div>
+
+            <div class="grid gap-4 xl:grid-cols-3">
+                <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm xl:col-span-2">
+                    <div class="mb-4 flex items-center justify-between gap-3">
+                        <div>
+                            <h3 id="trendSectionTitle" class="text-sm font-semibold uppercase tracking-wider text-slate-500">Booking Trends</h3>
+                            <p id="trendSectionSubtitle" class="text-xs text-slate-500">Booking volume over time</p>
+                        </div>
+                        <div id="trendGranularityControls" class="inline-flex rounded-xl border border-slate-300 bg-slate-50 p-1">
+                            <button id="trendDailyBtn" class="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm">Daily</button>
+                            <button id="trendWeeklyBtn" class="rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-500">Weekly</button>
+                        </div>
+                    </div>
+                    <div class="h-64">
+                        <canvas id="bookingsTrendChart"></canvas>
+                    </div>
+                </section>
+
+                <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div class="mb-4">
+                        <h3 id="distributionSectionTitle" class="text-sm font-semibold uppercase tracking-wider text-slate-500">Booking Distribution</h3>
+                        <p id="distributionSectionSubtitle" class="text-xs text-slate-500">Pending vs confirmed vs cancelled</p>
+                    </div>
+                    <div class="h-64">
+                        <canvas id="bookingDistributionChart"></canvas>
+                    </div>
+                </section>
+            </div>
+
+            <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h3 id="opsSectionTitle" class="text-sm font-semibold uppercase tracking-wider text-slate-500">Today's Activity</h3>
+                <div class="mt-3 grid gap-3 md:grid-cols-3">
+                    <article class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <p id="opsArrivalsLabel" class="text-xs uppercase tracking-wider text-slate-500">Arrivals Today</p>
+                        <p id="opsArrivals" class="mt-2 text-xl font-bold text-slate-900">-</p>
+                    </article>
+                    <article class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <p id="opsGuestsLabel" class="text-xs uppercase tracking-wider text-slate-500">Expected Guests</p>
+                        <p id="opsGuests" class="mt-2 text-xl font-bold text-slate-900">-</p>
+                    </article>
+                    <article class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <p id="opsStatusLabel" class="text-xs uppercase tracking-wider text-slate-500">Operational Status</p>
+                        <p id="opsStatus" class="mt-2 text-sm font-semibold text-emerald-700">All ready</p>
+                        <p id="opsCapacityLoad" class="mt-1 text-xs text-slate-500">Capacity load unavailable</p>
+                    </article>
+                </div>
+            </section>
+
+            <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div class="mb-3 flex items-center justify-between">
+                    <h3 id="recentSectionTitle" class="text-sm font-semibold uppercase tracking-wider text-slate-500">Recent Bookings</h3>
+                    <span id="recentSectionHint" class="text-xs text-slate-500">Last 5 records</span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500">
+                            <tr>
+                                <th id="recentCol1" class="px-3 py-2">Name</th>
+                                <th id="recentCol2" class="px-3 py-2">Date</th>
+                                <th id="recentCol3" class="px-3 py-2">Status</th>
+                                <th id="recentCol4" class="px-3 py-2">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recentBookingsBody" class="divide-y divide-slate-200"></tbody>
+                    </table>
+                </div>
+                <div id="recentBookingsState" class="px-3 py-4 text-center text-xs text-slate-500">Loading recent bookings...</div>
+            </section>
+        </section>
+
+        <div id="bookingsPage" class="hidden">
+            <section class="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div class="grid gap-3 md:grid-cols-4">
+                    <div>
+                        <label for="filterDate" class="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Date</label>
+                        <input id="filterDate" type="date" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
+                    </div>
+                    <div>
+                        <label for="filterStatus" class="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Status</label>
+                        <select id="filterStatus" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
+                            <option value="all">All</option>
+                            <option value="pending">Pending</option>
+                            <option value="confirmed">Confirmed</option>
+                            <option value="checked_in">Checked-in</option>
+                            <option value="completed">Completed</option>
+                            <option value="no_show">No-show</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+                    </div>
+                    <div class="md:col-span-2">
+                        <label for="filterSearch" class="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Search</label>
+                        <input id="filterSearch" type="text" placeholder="Booking ID or user" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
+                    </div>
+                </div>
+                <div class="mt-3 flex justify-end">
+                    <button id="exportCsvBtn" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Export CSV</button>
+                </div>
+            </section>
+
+            <section id="bookings-table" class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500">
+                            <tr>
+                                <th class="px-4 py-3">Booking ID</th>
+                                <th class="px-4 py-3">Name</th>
+                                <th class="px-4 py-3">Email</th>
+                                <th class="px-4 py-3">Phone</th>
+                                <th class="px-4 py-3">Date</th>
+                                <th class="px-4 py-3">Arrival</th>
+                                <th class="px-4 py-3">Window</th>
+                                <th class="px-4 py-3">Cottage</th>
+                                <th class="px-4 py-3">Guests</th>
+                                <th class="px-4 py-3">Total</th>
+                                <th class="px-4 py-3">Capacity</th>
+                                <th class="px-4 py-3">Status</th>
+                                <th class="px-4 py-3">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bookingsBody" class="divide-y divide-slate-200"></tbody>
+                    </table>
+                </div>
+                <div id="tableState" class="px-4 py-8 text-center text-sm text-slate-500"></div>
+            </section>
+        </div>
+
+        <div id="cottagesPage" class="hidden space-y-4">
+            <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h3 id="cottageFormTitle" class="text-lg font-semibold text-slate-900">Add Cottage</h3>
+                <p class="mt-1 text-sm text-slate-600">Create cottages here. Booking page will automatically fetch active cottages.</p>
+                <form id="cottageForm" class="mt-4 grid gap-3 md:grid-cols-4">
+                    <div class="md:col-span-2">
+                        <label for="cottageName" class="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Cottage Name</label>
+                        <input id="cottageName" type="text" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100" placeholder="Family Cottage A" required>
+                    </div>
+                    <div>
+                        <label for="cottageCapacity" class="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Capacity</label>
+                        <input id="cottageCapacity" type="number" min="1" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100" placeholder="8" required>
+                    </div>
+                    <div>
+                        <label for="cottagePrice" class="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Price</label>
+                        <input id="cottagePrice" type="number" min="1" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100" placeholder="2500" required>
+                    </div>
+                    <div>
+                        <label for="cottageStatus" class="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Status</label>
+                        <select id="cottageStatus" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                        </select>
+                    </div>
+                    <div class="md:col-span-3"></div>
+                    <div class="flex items-end justify-end gap-2">
+                        <button id="cancelCottageEditBtn" type="button" class="hidden w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Cancel Edit</button>
+                        <button id="saveCottageBtn" type="submit" class="w-full rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700">Save Cottage</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div class="border-b border-slate-200 px-4 py-3">
+                    <div class="flex flex-wrap items-end justify-between gap-3">
+                        <div>
+                            <h3 class="text-sm font-semibold uppercase tracking-wider text-slate-500">All Cottages</h3>
+                            <p class="mt-1 text-xs text-slate-500">Daily walk-in view of available vs booked cottages.</p>
+                        </div>
+                        <div class="flex flex-wrap items-end gap-2">
+                            <div>
+                                <label for="cottagesDateFilter" class="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-slate-500">View Date</label>
+                                <input id="cottagesDateFilter" type="date" class="rounded-lg border border-slate-300 px-3 py-2 text-xs focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
+                            </div>
+                            <div id="cottagesAvailabilitySummary" class="rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">Available: - | Booked: -</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500">
+                            <tr>
+                                <th class="px-4 py-3">Name</th>
+                                <th class="px-4 py-3">Capacity</th>
+                                <th class="px-4 py-3">Price</th>
+                                <th class="px-4 py-3">Status</th>
+                                <th class="px-4 py-3">Today Availability</th>
+                                <th class="px-4 py-3">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cottagesBody" class="divide-y divide-slate-200"></tbody>
+                    </table>
+                </div>
+                <div id="cottagesState" class="px-4 py-6 text-center text-sm text-slate-500"></div>
+            </section>
+        </div>
+
+        <div id="eventsPage" class="hidden space-y-4">
+            <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h3 class="text-lg font-semibold text-slate-900">Events</h3>
+                        <p class="mt-1 text-sm text-slate-600">Manage homepage events, status, and featured priorities.</p>
+                    </div>
+                    <button id="toggleEventFormBtn" class="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700">Add Event</button>
+                </div>
+
+                <div id="eventFormModal" class="fixed inset-0 z-[70] hidden bg-slate-900/60 p-4">
+                    <div class="mx-auto mt-3 w-full max-w-4xl rounded-2xl border border-slate-200 bg-white shadow-2xl md:mt-10">
+                        <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+                            <h4 class="text-base font-semibold text-slate-900">Event Form</h4>
+                            <button id="closeEventModalBtn" type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">Close</button>
+                        </div>
+                        <form id="eventForm" class="grid max-h-[80vh] gap-3 overflow-y-auto p-4 md:grid-cols-2">
+                            <input id="eventId" type="hidden">
+                            <div class="md:col-span-2">
+                                <label for="eventTitle" class="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Title</label>
+                                <input id="eventTitle" type="text" maxlength="140" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100" placeholder="Beach Festival 2026">
+                            </div>
+                            <div>
+                                <label for="eventDate" class="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Date</label>
+                                <input id="eventDate" type="date" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
+                            </div>
+                            <div>
+                                <label for="eventLocation" class="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Location</label>
+                                <input id="eventLocation" type="text" maxlength="180" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100" placeholder="Beachfront Stage">
+                            </div>
+                            <div class="md:col-span-2">
+                                <label for="eventDescription" class="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Description</label>
+                                <textarea id="eventDescription" rows="3" maxlength="3000" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100" placeholder="Describe the event experience."></textarea>
+                            </div>
+                            <div>
+                                <label for="eventTags" class="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Tags (comma separated)</label>
+                                <input id="eventTags" type="text" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100" placeholder="Live, DJ, Popular">
+                            </div>
+                            <div class="space-y-2">
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500">Image</label>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <input id="eventImageFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" class="block w-full text-xs text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-800 file:px-3 file:py-2 file:font-semibold file:text-white hover:file:bg-slate-900">
+                                    <button id="uploadEventImageBtn" type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100">Upload Image</button>
+                                </div>
+                                <input id="eventImageUrl" type="text" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100" placeholder="https://...">
+                                <img id="eventImagePreview" src="" alt="Event preview" class="hidden h-24 w-full rounded-lg border border-slate-200 object-cover">
+                            </div>
+                            <div class="flex flex-col justify-end gap-2">
+                                <label class="inline-flex items-center gap-2 text-sm text-slate-700"><input id="eventFeatured" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500">Featured Event</label>
+                                <label class="inline-flex items-center gap-2 text-sm text-slate-700"><input id="eventPublished" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500">Published</label>
+                            </div>
+                            <div class="md:col-span-2 flex flex-wrap justify-end gap-2">
+                                <button id="cancelEventEditBtn" type="button" class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Cancel</button>
+                                <button id="saveEventBtn" type="submit" class="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700">Save Event</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </section>
+
+            <section class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500">
+                            <tr>
+                                <th class="px-4 py-3">Image</th>
+                                <th class="px-4 py-3">Title</th>
+                                <th class="px-4 py-3">Date</th>
+                                <th class="px-4 py-3">Location</th>
+                                <th class="px-4 py-3">Status</th>
+                                <th class="px-4 py-3">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="eventsBody" class="divide-y divide-slate-200"></tbody>
+                    </table>
+                </div>
+                <div id="eventsState" class="px-4 py-6 text-center text-sm text-slate-500">No events yet.</div>
+            </section>
+        </div>
+
+        <div id="galleryPage" class="hidden space-y-4">
+            <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h3 class="text-lg font-semibold text-slate-900">Gallery</h3>
+                        <p class="mt-1 text-sm text-slate-600">Upload photos and control what appears on the public gallery.</p>
+                    </div>
+                    <button id="toggleGalleryFormBtn" class="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700">Upload Image</button>
+                </div>
+
+                <div id="galleryFormModal" class="fixed inset-0 z-[70] hidden bg-slate-900/60 p-4">
+                    <div class="mx-auto mt-3 w-full max-w-3xl rounded-2xl border border-slate-200 bg-white shadow-2xl md:mt-10">
+                        <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+                            <h4 class="text-base font-semibold text-slate-900">Gallery Item Form</h4>
+                            <button id="closeGalleryModalBtn" type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">Close</button>
+                        </div>
+                        <form id="galleryForm" class="grid max-h-[80vh] gap-3 overflow-y-auto p-4 md:grid-cols-2">
+                            <input id="galleryItemId" type="hidden">
+                            <div class="md:col-span-2">
+                                <label class="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Image</label>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <input id="galleryImageFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" class="block w-full text-xs text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-800 file:px-3 file:py-2 file:font-semibold file:text-white hover:file:bg-slate-900">
+                                    <button id="uploadGalleryImageBtn" type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100">Upload Image</button>
+                                </div>
+                                <input id="galleryImageUrl" type="text" required class="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100" placeholder="https://...">
+                                <img id="galleryImagePreview" src="" alt="Gallery preview" class="mt-2 hidden h-28 w-full rounded-lg border border-slate-200 object-cover">
+                            </div>
+                            <div>
+                                <label for="galleryCaption" class="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Caption</label>
+                                <input id="galleryCaption" type="text" maxlength="280" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100" placeholder="Golden hour by the shoreline">
+                            </div>
+                            <div>
+                                <label for="galleryCategory" class="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Category</label>
+                                <input id="galleryCategory" type="text" maxlength="80" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100" placeholder="Beach">
+                            </div>
+                            <div class="md:col-span-2 flex flex-wrap items-center justify-between gap-2">
+                                <label class="inline-flex items-center gap-2 text-sm text-slate-700"><input id="galleryPublished" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500">Published</label>
+                                <div class="flex gap-2">
+                                    <button id="cancelGalleryEditBtn" type="button" class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Cancel</button>
+                                    <button id="saveGalleryBtn" type="submit" class="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700">Save Item</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </section>
+
+            <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div class="mb-3 flex flex-wrap items-center gap-2">
+                    <label for="galleryCategoryFilter" class="text-xs font-semibold uppercase tracking-wider text-slate-500">Filter</label>
+                    <select id="galleryCategoryFilter" class="rounded-lg border border-slate-300 px-3 py-2 text-xs focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
+                        <option value="all">All Categories</option>
+                    </select>
+                </div>
+                <div id="galleryItemsGrid" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"></div>
+                <div id="galleryItemsState" class="px-4 py-6 text-center text-sm text-slate-500">No gallery items yet.</div>
+            </section>
+        </div>
+
+        <div id="inquiriesPage" class="hidden space-y-4">
+            <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div class="flex flex-wrap items-end justify-between gap-3">
+                    <div>
+                        <h3 class="text-lg font-semibold text-slate-900">Inquiries</h3>
+                        <p class="mt-1 text-sm text-slate-600">Review visitor inquiries and mark follow-up status.</p>
+                    </div>
+                    <div>
+                        <label for="inquiryStatusFilter" class="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Status</label>
+                        <select id="inquiryStatusFilter" class="rounded-lg border border-slate-300 px-3 py-2 text-xs focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
+                            <option value="all">All</option>
+                            <option value="new">New</option>
+                            <option value="contacted">Contacted</option>
+                            <option value="archived">Archived</option>
+                        </select>
+                    </div>
+                </div>
+            </section>
+
+            <section class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500">
+                            <tr>
+                                <th class="px-4 py-3">Created</th>
+                                <th class="px-4 py-3">Name</th>
+                                <th class="px-4 py-3">Email</th>
+                                <th class="px-4 py-3">Phone</th>
+                                <th class="px-4 py-3">Preferred Date</th>
+                                <th class="px-4 py-3">Message</th>
+                                <th class="px-4 py-3">Status</th>
+                                <th class="px-4 py-3">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inquiriesBody" class="divide-y divide-slate-200"></tbody>
+                    </table>
+                </div>
+                <div id="inquiriesState" class="px-4 py-6 text-center text-sm text-slate-500">No inquiries yet.</div>
+            </section>
+        </div>
+
+        <div id="scannerPage" class="hidden space-y-4">
+            <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h3 class="text-lg font-semibold text-slate-900">Entrance QR Scanner</h3>
+                <p class="mt-1 text-sm text-slate-600">Scan booking QR codes to validate entry and mark check-in.</p>
+
+                <div class="mt-4 grid gap-4 lg:grid-cols-2">
+                    <div>
+                        <div id="qrReader" class="w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-50"></div>
+                        <p id="scannerHint" class="mt-2 text-xs text-slate-500">Allow camera permission when prompted. Works best in HTTPS or localhost.</p>
+                    </div>
+
+                    <div class="space-y-3">
+                        <label for="manualBookingIdInput" class="block text-xs font-semibold uppercase tracking-wider text-slate-500">Manual Booking ID</label>
+                        <div class="flex flex-col gap-2 sm:flex-row">
+                            <input id="manualBookingIdInput" type="text" placeholder="Paste booking UUID" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100">
+                            <button id="manualScanBtn" class="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700">Validate</button>
+                        </div>
+                        <div class="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                            <p class="text-xs font-semibold uppercase tracking-wider text-amber-700">Admin Override</p>
+                            <p class="mt-1 text-xs text-amber-700">Use only for manual fixes and edge cases.</p>
+                            <button id="forceAllowBtn" class="mt-2 w-full rounded-lg border border-amber-400 bg-white px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100">Force Allow Entry</button>
+                        </div>
+
+                        <div id="scanResultCard" class="hidden rounded-xl border border-slate-200 bg-slate-50 p-4">
+                            <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Scan Result</p>
+                            <p id="scanStatusText" class="mt-2 text-lg font-bold text-slate-900">-</p>
+                            <p id="scanMessageText" class="mt-1 text-sm text-slate-600">-</p>
+                            <div class="mt-3 space-y-1 text-xs text-slate-600">
+                                <p><span class="font-semibold">Booking ID:</span> <span id="scanBookingId">-</span></p>
+                                <p><span class="font-semibold">Name:</span> <span id="scanBookingName">-</span></p>
+                                <p><span class="font-semibold">Date:</span> <span id="scanBookingDate">-</span></p>
+                                <p><span class="font-semibold">Status:</span> <span id="scanBookingStatus">-</span></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div class="mb-3 flex items-center justify-between gap-3">
+                    <h3 class="text-sm font-semibold uppercase tracking-wider text-slate-500">Scan History (Audit Trail)</h3>
+                    <button id="refreshScanLogsBtn" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">Refresh</button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500">
+                            <tr>
+                                <th class="px-4 py-3">Scanned At</th>
+                                <th class="px-4 py-3">Booking ID</th>
+                                <th class="px-4 py-3">Result</th>
+                                <th class="px-4 py-3">Admin</th>
+                            </tr>
+                        </thead>
+                        <tbody id="scanLogsBody" class="divide-y divide-slate-200"></tbody>
+                    </table>
+                </div>
+                <div id="scanLogsState" class="px-4 py-4 text-center text-xs text-slate-500">No scan logs yet.</div>
+            </section>
+        </div>
+    </main>
+</div>
+
+<aside id="detailsPanel" class="fixed inset-y-0 right-0 z-40 w-full max-w-md translate-x-full border-l border-slate-200 bg-white shadow-2xl transition-transform duration-300">
+    <div class="flex h-full flex-col">
+        <header class="flex items-start justify-between border-b border-slate-200 px-5 py-4">
+            <div>
+                <p class="text-xs uppercase tracking-wider text-slate-500">Booking Details</p>
+                <h3 id="detailBookingId" class="mt-1 text-lg font-semibold text-slate-900">-</h3>
+            </div>
+            <button id="closePanel" class="rounded-lg border border-slate-300 px-2 py-1 text-sm text-slate-600 hover:bg-slate-100">Close</button>
+        </header>
+        <div class="flex-1 space-y-6 overflow-y-auto px-5 py-5 text-sm">
+            <section>
+                <h4 class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Booking Info</h4>
+                <dl class="space-y-2">
+                    <div class="flex items-center justify-between"><dt>Name</dt><dd id="detailFullName">-</dd></div>
+                    <div class="flex items-center justify-between"><dt>Email</dt><dd id="detailEmail">-</dd></div>
+                    <div class="flex items-center justify-between"><dt>Phone</dt><dd id="detailPhone">-</dd></div>
+                    <div class="flex items-center justify-between"><dt>Date</dt><dd id="detailDate">-</dd></div>
+                    <div class="flex items-center justify-between"><dt>Arrival Time</dt><dd id="detailArrivalTime">-</dd></div>
+                    <div class="flex items-center justify-between"><dt>Grace Period</dt><dd id="detailGracePeriod">-</dd></div>
+                    <div class="flex items-center justify-between"><dt>Window</dt><dd id="detailArrivalWindow">-</dd></div>
+                    <div class="flex items-center justify-between"><dt>Cottage</dt><dd id="detailCottage">-</dd></div>
+                    <div class="flex items-center justify-between"><dt>Status</dt><dd id="detailStatus">-</dd></div>
+                    <div class="flex items-center justify-between"><dt>QR Code</dt><dd id="detailQrStatus">Not generated</dd></div>
+                </dl>
+            </section>
+
+            <section>
+                <h4 class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Guest Breakdown</h4>
+                <dl class="space-y-2">
+                    <div class="flex items-center justify-between"><dt>Adults</dt><dd id="detailAdults">0</dd></div>
+                    <div class="flex items-center justify-between"><dt>Children</dt><dd id="detailChildren">0</dd></div>
+                    <div class="flex items-center justify-between"><dt>Total Guests</dt><dd id="detailGuests">0</dd></div>
+                </dl>
+            </section>
+
+            <section>
+                <h4 class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Pricing</h4>
+                <dl class="space-y-2">
+                    <div class="flex items-center justify-between"><dt>Cottage Price</dt><dd id="detailCottagePrice">P0</dd></div>
+                    <div class="flex items-center justify-between"><dt>Adults Subtotal</dt><dd id="detailAdultSubtotal">P0</dd></div>
+                    <div class="flex items-center justify-between"><dt>Children Subtotal</dt><dd id="detailChildSubtotal">P0</dd></div>
+                    <div class="flex items-center justify-between border-t border-slate-200 pt-2 font-semibold"><dt>Total Amount</dt><dd id="detailTotal">P0</dd></div>
+                </dl>
+            </section>
+        </div>
+        <footer class="border-t border-slate-200 px-5 py-4">
+            <div class="grid grid-cols-2 gap-3">
+                <button id="panelApproveBtn" class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">Approve</button>
+                <button id="panelRejectBtn" class="rounded-lg border border-rose-400 px-4 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50">Reject</button>
+            </div>
+            <div class="mt-3 grid grid-cols-2 gap-3">
+                <button id="panelViewQrBtn" class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">View QR</button>
+                <button id="panelResendEmailBtn" class="rounded-lg border border-sky-400 bg-white px-4 py-2 text-sm font-medium text-sky-700 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-50">Resend Email</button>
+            </div>
+            <div class="mt-3">
+                <button id="panelCheckoutBtn" class="w-full rounded-lg border border-slate-400 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">Checkout</button>
+            </div>
+        </footer>
+    </div>
+</aside>
+
+<div id="panelBackdrop" class="fixed inset-0 z-30 hidden bg-black/35"></div>
+
+<div id="confirmReject" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4">
+    <div class="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+        <h4 class="text-lg font-semibold text-slate-900">Confirm Rejection</h4>
+        <p class="mt-2 text-sm text-slate-600">Are you sure you want to reject this booking?</p>
+        <div class="mt-5 flex justify-end gap-2">
+            <button id="cancelRejectBtn" class="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100">Cancel</button>
+            <button id="confirmRejectBtn" class="rounded-lg bg-rose-600 px-3 py-2 text-sm font-medium text-white hover:bg-rose-700">Reject Booking</button>
+        </div>
+    </div>
+</div>
+
+<div id="toast" class="fixed right-4 top-4 z-50 hidden rounded-xl px-4 py-3 text-sm font-medium shadow-lg"></div>
+
+<div id="cmsSaveLoaderOverlay" class="cms-loader-overlay hidden" aria-live="polite" aria-busy="false" aria-label="Saving content">
+    <div class="cms-loader-card" role="status">
+        <div class="cms-loading" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+        <p id="cmsSaveLoaderText" class="cms-loader-text">Saving content...</p>
+    </div>
+</div>
+
+<script>
+const ADULT_FEE = 50;
+const CHILD_FEE = 30;
+const TOKEN_KEY = 'access_token';
+const SCANNER_API_KEY = document.body.dataset.scannerApiKey || 'bagasbas-scanner-key';
+const SCANNER_ADMIN_ID = document.body.dataset.scannerAdminId || 'scanner-device';
+const SUPABASE_URL = document.body.dataset.supabaseUrl || '';
+const SUPABASE_ANON_KEY = document.body.dataset.supabaseAnonKey || '';
+const INITIAL_BOOKING_ENABLED = String(document.body.dataset.bookingEnabled || 'false').toLowerCase() === 'true';
+const supabaseClient = (window.supabase && SUPABASE_URL && SUPABASE_ANON_KEY)
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+    : null;
+
+function getAccessToken() {
+    return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY) || '';
+}
+
+function clearAccessToken() {
+    localStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(TOKEN_KEY);
+}
+
+function shouldAttachAuth(input) {
+    if (typeof input === 'string') {
+        return input.startsWith('/') || input.startsWith(window.location.origin);
+    }
+
+    if (typeof Request !== 'undefined' && input instanceof Request) {
+        return String(input.url || '').startsWith(window.location.origin);
+    }
+
+    return true;
+}
+
+const nativeFetch = window.fetch.bind(window);
+window.fetch = async (...args) => {
+    const input = args[0];
+    const init = args[1] || {};
+    const headers = new Headers(init.headers || {});
+
+    if (shouldAttachAuth(input)) {
+        const token = getAccessToken();
+        if (token && !headers.has('Authorization')) {
+            headers.set('Authorization', 'Bearer ' + token);
+        }
+    }
+
+    const response = await nativeFetch(input, { ...init, headers });
+    if (response.status === 401) {
+        clearAccessToken();
+        window.location.replace('/admin/login');
+    }
+    return response;
+};
+
+const state = {
+    bookings: [],
+    cottages: [],
+    events: [],
+    galleryItems: [],
+    inquiries: [],
+    editingCottageId: null,
+    editingEventId: null,
+    editingGalleryId: null,
+    selectedBookingId: null,
+    currentView: 'dashboard',
+    filters: {
+        date: '',
+        status: 'all',
+        search: '',
+        cottagesDate: '',
+        galleryCategory: 'all',
+    },
+    pendingRejectId: null,
+    scanner: {
+        instance: null,
+        active: false,
+        busy: false,
+        lastScannedText: '',
+        currentBookingId: '',
+    },
+    admin: {
+        id: '',
+        email: '',
+        role: 'admin',
+    },
+    settings: {
+        bookingEnabled: INITIAL_BOOKING_ENABLED,
+    },
+    dashboard: {
+        scope: 'today',
+        trendGranularity: 'daily',
+        allBookings: [],
+        cmsMetrics: null,
+        lastMetrics: null,
+        refreshTimer: null,
+        trendChart: null,
+        distributionChart: null,
+    },
+};
+
+const refs = {
+    pageTitle: document.getElementById('pageTitle'),
+    dashboardDateContext: document.getElementById('dashboardDateContext'),
+    pageSubtitle: document.getElementById('pageSubtitle'),
+    liveBadge: document.getElementById('liveBadge'),
+    dashboardHeaderControls: document.getElementById('dashboardHeaderControls'),
+    dashboardQuickActions: document.getElementById('dashboardQuickActions'),
+    periodTodayBtn: document.getElementById('periodTodayBtn'),
+    periodWeekBtn: document.getElementById('periodWeekBtn'),
+    refreshDashboardBtn: document.getElementById('refreshDashboardBtn'),
+    notifyBtn: document.getElementById('notifyBtn'),
+    quickNewBookingBtn: document.getElementById('quickNewBookingBtn'),
+    quickScannerBtn: document.getElementById('quickScannerBtn'),
+    quickCottagesBtn: document.getElementById('quickCottagesBtn'),
+    systemModeBadge: document.getElementById('systemModeBadge'),
+    toggleBookingBtn: document.getElementById('toggleBookingBtn'),
+    adminRoleBadge: document.getElementById('adminRoleBadge'),
+    logoutBtn: document.getElementById('logoutBtn'),
+    dashboardPage: document.getElementById('dashboardPage'),
+    bookingsPage: document.getElementById('bookingsPage'),
+    cottagesPage: document.getElementById('cottagesPage'),
+    eventsPage: document.getElementById('eventsPage'),
+    galleryPage: document.getElementById('galleryPage'),
+    inquiriesPage: document.getElementById('inquiriesPage'),
+    scannerPage: document.getElementById('scannerPage'),
+    metricTotal: document.getElementById('metricTotal'),
+    metricTotalLabel: document.getElementById('metricTotalLabel'),
+    metricTotalSubtext: document.getElementById('metricTotalSubtext'),
+    metricTotalTrend: document.getElementById('metricTotalTrend'),
+    metricPending: document.getElementById('metricPending'),
+    metricPendingLabel: document.getElementById('metricPendingLabel'),
+    metricPendingSubtext: document.getElementById('metricPendingSubtext'),
+    metricPendingTrend: document.getElementById('metricPendingTrend'),
+    metricConfirmed: document.getElementById('metricConfirmed'),
+    metricConfirmedLabel: document.getElementById('metricConfirmedLabel'),
+    metricConfirmedSubtext: document.getElementById('metricConfirmedSubtext'),
+    metricConfirmedTrend: document.getElementById('metricConfirmedTrend'),
+    metricCapacity: document.getElementById('metricCapacity'),
+    metricCapacityLabel: document.getElementById('metricCapacityLabel'),
+    capacityBarWrap: document.getElementById('capacityBarWrap'),
+    metricCapacitySubtext: document.getElementById('metricCapacitySubtext'),
+    capacityBar: document.getElementById('capacityBar'),
+    trendSectionTitle: document.getElementById('trendSectionTitle'),
+    trendSectionSubtitle: document.getElementById('trendSectionSubtitle'),
+    trendGranularityControls: document.getElementById('trendGranularityControls'),
+    distributionSectionTitle: document.getElementById('distributionSectionTitle'),
+    distributionSectionSubtitle: document.getElementById('distributionSectionSubtitle'),
+    trendDailyBtn: document.getElementById('trendDailyBtn'),
+    trendWeeklyBtn: document.getElementById('trendWeeklyBtn'),
+    bookingsTrendChart: document.getElementById('bookingsTrendChart'),
+    bookingDistributionChart: document.getElementById('bookingDistributionChart'),
+    opsSectionTitle: document.getElementById('opsSectionTitle'),
+    opsArrivalsLabel: document.getElementById('opsArrivalsLabel'),
+    opsArrivals: document.getElementById('opsArrivals'),
+    opsGuestsLabel: document.getElementById('opsGuestsLabel'),
+    opsGuests: document.getElementById('opsGuests'),
+    opsStatusLabel: document.getElementById('opsStatusLabel'),
+    opsStatus: document.getElementById('opsStatus'),
+    opsCapacityLoad: document.getElementById('opsCapacityLoad'),
+    recentSectionTitle: document.getElementById('recentSectionTitle'),
+    recentSectionHint: document.getElementById('recentSectionHint'),
+    recentCol1: document.getElementById('recentCol1'),
+    recentCol2: document.getElementById('recentCol2'),
+    recentCol3: document.getElementById('recentCol3'),
+    recentCol4: document.getElementById('recentCol4'),
+    recentBookingsBody: document.getElementById('recentBookingsBody'),
+    recentBookingsState: document.getElementById('recentBookingsState'),
+    filterDate: document.getElementById('filterDate'),
+    filterStatus: document.getElementById('filterStatus'),
+    filterSearch: document.getElementById('filterSearch'),
+    body: document.getElementById('bookingsBody'),
+    tableState: document.getElementById('tableState'),
+    cottagesBody: document.getElementById('cottagesBody'),
+    cottagesState: document.getElementById('cottagesState'),
+    cottagesDateFilter: document.getElementById('cottagesDateFilter'),
+    cottagesAvailabilitySummary: document.getElementById('cottagesAvailabilitySummary'),
+    cottageForm: document.getElementById('cottageForm'),
+    cottageFormTitle: document.getElementById('cottageFormTitle'),
+    cottageName: document.getElementById('cottageName'),
+    cottageCapacity: document.getElementById('cottageCapacity'),
+    cottagePrice: document.getElementById('cottagePrice'),
+    cottageStatus: document.getElementById('cottageStatus'),
+    saveCottageBtn: document.getElementById('saveCottageBtn'),
+    cancelCottageEditBtn: document.getElementById('cancelCottageEditBtn'),
+    toggleEventFormBtn: document.getElementById('toggleEventFormBtn'),
+    eventFormModal: document.getElementById('eventFormModal'),
+    closeEventModalBtn: document.getElementById('closeEventModalBtn'),
+    eventForm: document.getElementById('eventForm'),
+    eventId: document.getElementById('eventId'),
+    eventTitle: document.getElementById('eventTitle'),
+    eventDate: document.getElementById('eventDate'),
+    eventLocation: document.getElementById('eventLocation'),
+    eventDescription: document.getElementById('eventDescription'),
+    eventTags: document.getElementById('eventTags'),
+    eventImageFile: document.getElementById('eventImageFile'),
+    uploadEventImageBtn: document.getElementById('uploadEventImageBtn'),
+    eventImageUrl: document.getElementById('eventImageUrl'),
+    eventImagePreview: document.getElementById('eventImagePreview'),
+    eventFeatured: document.getElementById('eventFeatured'),
+    eventPublished: document.getElementById('eventPublished'),
+    cancelEventEditBtn: document.getElementById('cancelEventEditBtn'),
+    saveEventBtn: document.getElementById('saveEventBtn'),
+    eventsBody: document.getElementById('eventsBody'),
+    eventsState: document.getElementById('eventsState'),
+    toggleGalleryFormBtn: document.getElementById('toggleGalleryFormBtn'),
+    galleryFormModal: document.getElementById('galleryFormModal'),
+    closeGalleryModalBtn: document.getElementById('closeGalleryModalBtn'),
+    galleryForm: document.getElementById('galleryForm'),
+    galleryItemId: document.getElementById('galleryItemId'),
+    galleryImageFile: document.getElementById('galleryImageFile'),
+    uploadGalleryImageBtn: document.getElementById('uploadGalleryImageBtn'),
+    galleryImageUrl: document.getElementById('galleryImageUrl'),
+    galleryImagePreview: document.getElementById('galleryImagePreview'),
+    galleryCaption: document.getElementById('galleryCaption'),
+    galleryCategory: document.getElementById('galleryCategory'),
+    galleryPublished: document.getElementById('galleryPublished'),
+    cancelGalleryEditBtn: document.getElementById('cancelGalleryEditBtn'),
+    saveGalleryBtn: document.getElementById('saveGalleryBtn'),
+    galleryCategoryFilter: document.getElementById('galleryCategoryFilter'),
+    galleryItemsGrid: document.getElementById('galleryItemsGrid'),
+    galleryItemsState: document.getElementById('galleryItemsState'),
+    inquiryStatusFilter: document.getElementById('inquiryStatusFilter'),
+    inquiriesBody: document.getElementById('inquiriesBody'),
+    inquiriesState: document.getElementById('inquiriesState'),
+    panel: document.getElementById('detailsPanel'),
+    closePanel: document.getElementById('closePanel'),
+    detailBookingId: document.getElementById('detailBookingId'),
+    detailFullName: document.getElementById('detailFullName'),
+    detailEmail: document.getElementById('detailEmail'),
+    detailPhone: document.getElementById('detailPhone'),
+    detailDate: document.getElementById('detailDate'),
+    detailArrivalTime: document.getElementById('detailArrivalTime'),
+    detailGracePeriod: document.getElementById('detailGracePeriod'),
+    detailArrivalWindow: document.getElementById('detailArrivalWindow'),
+    detailCottage: document.getElementById('detailCottage'),
+    detailStatus: document.getElementById('detailStatus'),
+    detailQrStatus: document.getElementById('detailQrStatus'),
+    detailAdults: document.getElementById('detailAdults'),
+    detailChildren: document.getElementById('detailChildren'),
+    detailGuests: document.getElementById('detailGuests'),
+    detailCottagePrice: document.getElementById('detailCottagePrice'),
+    detailAdultSubtotal: document.getElementById('detailAdultSubtotal'),
+    detailChildSubtotal: document.getElementById('detailChildSubtotal'),
+    detailTotal: document.getElementById('detailTotal'),
+    panelApproveBtn: document.getElementById('panelApproveBtn'),
+    panelRejectBtn: document.getElementById('panelRejectBtn'),
+    panelViewQrBtn: document.getElementById('panelViewQrBtn'),
+    panelResendEmailBtn: document.getElementById('panelResendEmailBtn'),
+    panelCheckoutBtn: document.getElementById('panelCheckoutBtn'),
+    confirmReject: document.getElementById('confirmReject'),
+    cancelRejectBtn: document.getElementById('cancelRejectBtn'),
+    confirmRejectBtn: document.getElementById('confirmRejectBtn'),
+    toast: document.getElementById('toast'),
+    cmsSaveLoaderOverlay: document.getElementById('cmsSaveLoaderOverlay'),
+    cmsSaveLoaderText: document.getElementById('cmsSaveLoaderText'),
+    exportCsvBtn: document.getElementById('exportCsvBtn'),
+    panelBackdrop: document.getElementById('panelBackdrop'),
+    sidebarDashboardLink: document.getElementById('sidebarDashboardLink'),
+    sidebarBookingsLink: document.getElementById('sidebarBookingsLink'),
+    sidebarCottagesLink: document.getElementById('sidebarCottagesLink'),
+    sidebarEventsLink: document.getElementById('sidebarEventsLink'),
+    sidebarGalleryLink: document.getElementById('sidebarGalleryLink'),
+    sidebarInquiriesLink: document.getElementById('sidebarInquiriesLink'),
+    sidebarScannerLink: document.getElementById('sidebarScannerLink'),
+    sidebarCapacityLink: document.getElementById('sidebarCapacityLink'),
+    sidebarReportsLink: document.getElementById('sidebarReportsLink'),
+    mobileDashboardLink: document.getElementById('mobileDashboardLink'),
+    mobileBookingsLink: document.getElementById('mobileBookingsLink'),
+    mobileCottagesLink: document.getElementById('mobileCottagesLink'),
+    mobileEventsLink: document.getElementById('mobileEventsLink'),
+    mobileGalleryLink: document.getElementById('mobileGalleryLink'),
+    mobileInquiriesLink: document.getElementById('mobileInquiriesLink'),
+    mobileScannerLink: document.getElementById('mobileScannerLink'),
+    qrReader: document.getElementById('qrReader'),
+    scannerHint: document.getElementById('scannerHint'),
+    manualBookingIdInput: document.getElementById('manualBookingIdInput'),
+    manualScanBtn: document.getElementById('manualScanBtn'),
+    forceAllowBtn: document.getElementById('forceAllowBtn'),
+    scanResultCard: document.getElementById('scanResultCard'),
+    scanStatusText: document.getElementById('scanStatusText'),
+    scanMessageText: document.getElementById('scanMessageText'),
+    scanBookingId: document.getElementById('scanBookingId'),
+    scanBookingName: document.getElementById('scanBookingName'),
+    scanBookingDate: document.getElementById('scanBookingDate'),
+    scanBookingStatus: document.getElementById('scanBookingStatus'),
+    scanLogsBody: document.getElementById('scanLogsBody'),
+    scanLogsState: document.getElementById('scanLogsState'),
+    refreshScanLogsBtn: document.getElementById('refreshScanLogsBtn'),
+};
+
+function setSidebarActive(view) {
+    const links = {
+        dashboard: refs.sidebarDashboardLink,
+        bookings: refs.sidebarBookingsLink,
+        cottages: refs.sidebarCottagesLink,
+        events: refs.sidebarEventsLink,
+        gallery: refs.sidebarGalleryLink,
+        inquiries: refs.sidebarInquiriesLink,
+        scanner: refs.sidebarScannerLink,
+    };
+
+    const mobileLinks = {
+        dashboard: refs.mobileDashboardLink,
+        bookings: refs.mobileBookingsLink,
+        cottages: refs.mobileCottagesLink,
+        events: refs.mobileEventsLink,
+        gallery: refs.mobileGalleryLink,
+        inquiries: refs.mobileInquiriesLink,
+        scanner: refs.mobileScannerLink,
+    };
+
+    Object.keys(links).forEach((key) => {
+        const isActive = key === view;
+        const link = links[key];
+        link.classList.toggle('bg-slate-900', isActive);
+        link.classList.toggle('text-white', isActive);
+        link.classList.toggle('font-medium', isActive);
+        link.classList.toggle('text-slate-600', !isActive);
+    });
+
+    Object.keys(mobileLinks).forEach((key) => {
+        const isActive = key === view;
+        const link = mobileLinks[key];
+        link.classList.toggle('bg-slate-900', isActive);
+        link.classList.toggle('text-white', isActive);
+        link.classList.toggle('text-slate-600', !isActive);
+    });
+}
+
+function setMainView(view) {
+    const normalized = ['dashboard', 'bookings', 'cottages', 'events', 'gallery', 'inquiries', 'scanner'].includes(view)
+        ? view
+        : 'dashboard';
+    state.currentView = normalized;
+    const isDashboard = normalized === 'dashboard';
+
+    refs.dashboardPage.classList.toggle('hidden', !isDashboard);
+    refs.bookingsPage.classList.toggle('hidden', normalized !== 'bookings');
+    refs.cottagesPage.classList.toggle('hidden', normalized !== 'cottages');
+    refs.eventsPage.classList.toggle('hidden', normalized !== 'events');
+    refs.galleryPage.classList.toggle('hidden', normalized !== 'gallery');
+    refs.inquiriesPage.classList.toggle('hidden', normalized !== 'inquiries');
+    refs.scannerPage.classList.toggle('hidden', normalized !== 'scanner');
+    refs.dashboardDateContext.classList.toggle('hidden', !isDashboard);
+    refs.dashboardHeaderControls.classList.toggle('hidden', !isDashboard);
+    refs.dashboardQuickActions.classList.toggle('hidden', !isDashboard);
+    refs.liveBadge.classList.toggle('hidden', !isDashboard);
+
+    if (normalized === 'bookings') {
+        refs.pageTitle.textContent = 'Bookings';
+        refs.pageSubtitle.textContent = 'View, search, and manage all booking records.';
+    } else if (normalized === 'cottages') {
+        refs.pageTitle.textContent = 'Cottages';
+        refs.pageSubtitle.textContent = 'Manage cottage inventory used by the booking page.';
+    } else if (normalized === 'events') {
+        refs.pageTitle.textContent = 'Events';
+        refs.pageSubtitle.textContent = 'Create, publish, and feature event content.';
+    } else if (normalized === 'gallery') {
+        refs.pageTitle.textContent = 'Gallery';
+        refs.pageSubtitle.textContent = 'Upload and curate visual content blocks.';
+    } else if (normalized === 'inquiries') {
+        refs.pageTitle.textContent = 'Inquiries';
+        refs.pageSubtitle.textContent = 'Track visitor inquiries and follow-up actions.';
+    } else if (normalized === 'scanner') {
+        refs.pageTitle.textContent = 'QR Scanner';
+        refs.pageSubtitle.textContent = 'Validate arrivals instantly at the entrance gate.';
+    } else {
+        refs.pageTitle.textContent = 'Dashboard';
+        refs.pageSubtitle.textContent = state.settings.bookingEnabled
+            ? 'Live overview of bookings, arrivals, and capacity.'
+            : 'Content health, engagement, and freshness overview.';
+        updateDashboardDateContext();
+    }
+
+    setSidebarActive(state.currentView);
+}
+
+function toIsoDate(date) {
+    return date.toISOString().slice(0, 10);
+}
+
+function parseIsoDate(value) {
+    if (!value) {
+        return null;
+    }
+
+    const parsed = new Date(String(value) + 'T00:00:00');
+    if (Number.isNaN(parsed.getTime())) {
+        return null;
+    }
+    return parsed;
+}
+
+function getTodayIso() {
+    return toIsoDate(new Date());
+}
+
+function shiftIsoDate(isoDate, days) {
+    const base = parseIsoDate(isoDate);
+    if (!base) {
+        return isoDate;
+    }
+    base.setDate(base.getDate() + days);
+    return toIsoDate(base);
+}
+
+function startOfWeek(date) {
+    const normalized = new Date(date);
+    const day = normalized.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    normalized.setDate(normalized.getDate() + diff);
+    normalized.setHours(0, 0, 0, 0);
+    return normalized;
+}
+
+function getScopeRange(scope, anchorIso, previous = false) {
+    if (scope === 'week') {
+        const end = parseIsoDate(anchorIso) || new Date();
+        if (previous) {
+            end.setDate(end.getDate() - 7);
+        }
+        const start = new Date(end);
+        start.setDate(start.getDate() - 6);
+        return { startIso: toIsoDate(start), endIso: toIsoDate(end) };
+    }
+
+    const day = previous ? shiftIsoDate(anchorIso, -1) : anchorIso;
+    return { startIso: day, endIso: day };
+}
+
+function filterBookingsByRange(bookings, range) {
+    return bookings.filter((booking) => {
+        const date = String(booking.date || '');
+        return date >= range.startIso && date <= range.endIso;
+    });
+}
+
+function sortBookingsByRecent(bookings) {
+    return [...bookings].sort((a, b) => {
+        const aDate = new Date(a.created_at || a.date || 0).getTime();
+        const bDate = new Date(b.created_at || b.date || 0).getTime();
+        return bDate - aDate;
+    });
+}
+
+function summarizeBookings(bookings) {
+    const summary = {
+        total: bookings.length,
+        pending: 0,
+        confirmed: 0,
+        cancelled: 0,
+        arrivals: 0,
+        guests: 0,
+    };
+
+    bookings.forEach((booking) => {
+        const status = normalizeBookingStatus(booking.status);
+        const guests = Number(booking.num_people || 0);
+
+        if (status === 'pending') {
+            summary.pending += 1;
+        }
+        if (status === 'confirmed') {
+            summary.confirmed += 1;
+        }
+        if (status === 'cancelled' || status === 'no_show') {
+            summary.cancelled += 1;
+        }
+        if (status === 'confirmed' || status === 'checked_in') {
+            summary.arrivals += 1;
+        }
+        if (status !== 'cancelled' && status !== 'no_show') {
+            summary.guests += guests;
+        }
+    });
+
+    return summary;
+}
+
+function styleTrendBadge(element, delta, positiveIsGood = true) {
+    const good = positiveIsGood ? delta >= 0 : delta <= 0;
+    const text = (delta > 0 ? '+' : '') + String(delta);
+    element.textContent = text;
+    element.className = 'rounded-full px-2 py-1 text-[11px] font-semibold';
+
+    if (delta === 0) {
+        element.classList.add('bg-slate-100', 'text-slate-600');
+        return;
+    }
+
+    if (good) {
+        element.classList.add('bg-emerald-100', 'text-emerald-700');
+    } else {
+        element.classList.add('bg-rose-100', 'text-rose-700');
+    }
+}
+
+function setScopeButtons() {
+    const todayActive = state.dashboard.scope === 'today';
+    refs.periodTodayBtn.className = todayActive
+        ? 'rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm'
+        : 'rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-500';
+    refs.periodWeekBtn.className = !todayActive
+        ? 'rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm'
+        : 'rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-500';
+}
+
+function setTrendButtons() {
+    const daily = state.dashboard.trendGranularity === 'daily';
+    refs.trendDailyBtn.className = daily
+        ? 'rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm'
+        : 'rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-500';
+    refs.trendWeeklyBtn.className = !daily
+        ? 'rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm'
+        : 'rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-500';
+}
+
+function updateDashboardDateContext() {
+    const today = new Date();
+    const longDate = today.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    if (state.dashboard.scope === 'week') {
+        const start = startOfWeek(today);
+        const end = new Date(start);
+        end.setDate(end.getDate() + 6);
+        const startText = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const endText = end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        refs.dashboardDateContext.textContent = 'This Week • ' + startText + ' - ' + endText;
+    } else {
+        refs.dashboardDateContext.textContent = 'Today • ' + longDate;
+    }
+}
+
+function buildDailyTrend(bookings, anchorIso, days = 7) {
+    const labels = [];
+    const values = [];
+
+    for (let i = days - 1; i >= 0; i -= 1) {
+        const dateIso = shiftIsoDate(anchorIso, -i);
+        const dateObj = parseIsoDate(dateIso);
+        labels.push(dateObj ? dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : dateIso);
+        values.push(bookings.filter((booking) => String(booking.date || '') === dateIso).length);
+    }
+
+    return { labels, values };
+}
+
+function buildWeeklyTrend(bookings, anchorIso, weeks = 8) {
+    const labels = [];
+    const values = [];
+    const anchor = parseIsoDate(anchorIso) || new Date();
+    const anchorStart = startOfWeek(anchor);
+
+    for (let i = weeks - 1; i >= 0; i -= 1) {
+        const start = new Date(anchorStart);
+        start.setDate(start.getDate() - (i * 7));
+        const end = new Date(start);
+        end.setDate(end.getDate() + 6);
+        const startIso = toIsoDate(start);
+        const endIso = toIsoDate(end);
+
+        labels.push(start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+        values.push(bookings.filter((booking) => {
+            const date = String(booking.date || '');
+            return date >= startIso && date <= endIso;
+        }).length);
+    }
+
+    return { labels, values };
+}
+
+function setDashboardModeCopy() {
+    const bookingEnabled = Boolean(state.settings.bookingEnabled);
+    const periodControls = refs.periodTodayBtn ? refs.periodTodayBtn.parentElement : null;
+
+    if (refs.metricTotalLabel) {
+        refs.metricTotalLabel.textContent = bookingEnabled ? 'Total Bookings' : 'Published Events';
+    }
+    if (refs.metricPendingLabel) {
+        refs.metricPendingLabel.textContent = bookingEnabled ? 'Pending' : 'Gallery Items';
+    }
+    if (refs.metricConfirmedLabel) {
+        refs.metricConfirmedLabel.textContent = bookingEnabled ? 'Confirmed' : 'Total Inquiries';
+    }
+    if (refs.metricCapacityLabel) {
+        refs.metricCapacityLabel.textContent = bookingEnabled ? 'Capacity' : 'New Inquiries';
+    }
+
+    if (refs.trendSectionTitle) {
+        refs.trendSectionTitle.textContent = bookingEnabled ? 'Booking Trends' : 'Content Freshness';
+    }
+    if (refs.trendSectionSubtitle) {
+        refs.trendSectionSubtitle.textContent = bookingEnabled
+            ? 'Booking volume over time'
+            : 'Events, gallery uploads, and inquiries in the last 7 days';
+    }
+    if (refs.distributionSectionTitle) {
+        refs.distributionSectionTitle.textContent = bookingEnabled ? 'Booking Distribution' : 'Content Status';
+    }
+    if (refs.distributionSectionSubtitle) {
+        refs.distributionSectionSubtitle.textContent = bookingEnabled
+            ? 'Pending vs confirmed vs cancelled'
+            : 'Published vs draft content';
+    }
+
+    if (refs.opsSectionTitle) {
+        refs.opsSectionTitle.textContent = bookingEnabled ? "Today's Activity" : 'Engagement Snapshot';
+    }
+    if (refs.opsArrivalsLabel) {
+        refs.opsArrivalsLabel.textContent = bookingEnabled ? 'Arrivals Today' : 'New Inquiries';
+    }
+    if (refs.opsGuestsLabel) {
+        refs.opsGuestsLabel.textContent = bookingEnabled ? 'Expected Guests' : 'New Inquiries (Week)';
+    }
+    if (refs.opsStatusLabel) {
+        refs.opsStatusLabel.textContent = bookingEnabled ? 'Operational Status' : 'Response Rate';
+    }
+
+    if (refs.recentSectionTitle) {
+        refs.recentSectionTitle.textContent = bookingEnabled ? 'Recent Bookings' : 'Recent Activity';
+    }
+    if (refs.recentSectionHint) {
+        refs.recentSectionHint.textContent = bookingEnabled ? 'Last 5 records' : 'Latest content and inquiry events';
+    }
+    if (refs.recentCol1) {
+        refs.recentCol1.textContent = bookingEnabled ? 'Name' : 'Activity';
+    }
+    if (refs.recentCol2) {
+        refs.recentCol2.textContent = bookingEnabled ? 'Date' : 'Item';
+    }
+    if (refs.recentCol3) {
+        refs.recentCol3.textContent = bookingEnabled ? 'Status' : 'When';
+    }
+    if (refs.recentCol4) {
+        refs.recentCol4.textContent = bookingEnabled ? 'Action' : 'Details';
+    }
+
+    if (periodControls) {
+        periodControls.classList.toggle('hidden', !bookingEnabled);
+    }
+    if (refs.trendGranularityControls) {
+        refs.trendGranularityControls.classList.toggle('hidden', !bookingEnabled);
+    }
+    if (refs.capacityBarWrap) {
+        refs.capacityBarWrap.classList.toggle('hidden', !bookingEnabled);
+    }
+}
+
+function renderBookingTrendChart(bookings) {
+    if (typeof Chart === 'undefined' || !refs.bookingsTrendChart) {
+        return;
+    }
+
+    const trend = state.dashboard.trendGranularity === 'weekly'
+        ? buildWeeklyTrend(bookings, getTodayIso())
+        : buildDailyTrend(bookings, getTodayIso());
+
+    if (state.dashboard.trendChart) {
+        state.dashboard.trendChart.destroy();
+    }
+
+    state.dashboard.trendChart = new Chart(refs.bookingsTrendChart, {
+        type: 'line',
+        data: {
+            labels: trend.labels,
+            datasets: [
+                {
+                    label: 'Bookings',
+                    data: trend.values,
+                    borderColor: '#0ea5e9',
+                    backgroundColor: 'rgba(14, 165, 233, 0.16)',
+                    borderWidth: 2,
+                    tension: 0.34,
+                    fill: true,
+                    pointRadius: 3,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { precision: 0 },
+                    grid: { color: '#e2e8f0' },
+                },
+                x: {
+                    grid: { display: false },
+                },
+            },
+        },
+    });
+}
+
+function renderBookingDistributionChart(summary) {
+    if (typeof Chart === 'undefined' || !refs.bookingDistributionChart) {
+        return;
+    }
+
+    if (state.dashboard.distributionChart) {
+        state.dashboard.distributionChart.destroy();
+    }
+
+    state.dashboard.distributionChart = new Chart(refs.bookingDistributionChart, {
+        type: 'doughnut',
+        data: {
+            labels: ['Pending', 'Confirmed', 'Cancelled'],
+            datasets: [
+                {
+                    data: [summary.pending, summary.confirmed, summary.cancelled],
+                    backgroundColor: ['#f59e0b', '#10b981', '#ef4444'],
+                    borderColor: '#ffffff',
+                    borderWidth: 2,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        usePointStyle: true,
+                        boxWidth: 8,
+                        color: '#475569',
+                    },
+                },
+            },
+            cutout: '66%',
+        },
+    });
+}
+
+function renderRecentBookings(bookings) {
+    refs.recentBookingsBody.innerHTML = '';
+    const recent = sortBookingsByRecent(bookings).slice(0, 5);
+
+    if (!recent.length) {
+        refs.recentBookingsState.textContent = 'No recent bookings yet.';
+        return;
+    }
+
+    refs.recentBookingsState.textContent = '';
+    recent.forEach((booking) => {
+        const status = normalizeBookingStatus(booking.status);
+        const row = document.createElement('tr');
+        row.innerHTML = '' +
+            '<td class="px-3 py-2 font-medium text-slate-900">' + (booking.full_name || '-') + '</td>' +
+            '<td class="px-3 py-2 text-slate-600">' + (booking.date || '-') + '</td>' +
+            '<td class="px-3 py-2"><span class="' + statusBadge(status) + '">' + statusLabel(status) + '</span></td>' +
+            '<td class="px-3 py-2"><button data-recent-id="' + booking.id + '" class="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100">View</button></td>';
+        refs.recentBookingsBody.appendChild(row);
+    });
+}
+
+function renderBookingOperations(todaySummary, metrics) {
+    refs.opsArrivals.textContent = todaySummary.arrivals + ' booking' + (todaySummary.arrivals === 1 ? '' : 's') + ' arriving';
+    refs.opsGuests.textContent = todaySummary.guests + ' total guests';
+
+    const usage = metrics && metrics.capacity_usage_percent !== null && metrics.capacity_usage_percent !== undefined
+        ? Number(metrics.capacity_usage_percent)
+        : null;
+
+    let statusText = 'All ready';
+    let statusClass = 'mt-2 text-sm font-semibold text-emerald-700';
+    if (todaySummary.total === 0) {
+        statusText = 'No bookings yet today';
+        statusClass = 'mt-2 text-sm font-semibold text-slate-600';
+    } else if (usage !== null && usage >= 90) {
+        statusText = 'Over capacity risk';
+        statusClass = 'mt-2 text-sm font-semibold text-rose-700';
+    } else if (todaySummary.pending > 0) {
+        statusText = 'High traffic expected';
+        statusClass = 'mt-2 text-sm font-semibold text-amber-700';
+    }
+
+    refs.opsStatus.textContent = statusText;
+    refs.opsStatus.className = statusClass;
+    refs.opsCapacityLoad.textContent = usage === null
+        ? 'Capacity monitor unavailable'
+        : String(Math.round(usage)) + '% current load';
+}
+
+function renderCmsTrendChart(metrics) {
+    if (typeof Chart === 'undefined' || !refs.bookingsTrendChart) {
+        return;
+    }
+
+    if (state.dashboard.trendChart) {
+        state.dashboard.trendChart.destroy();
+    }
+
+    state.dashboard.trendChart = new Chart(refs.bookingsTrendChart, {
+        type: 'bar',
+        data: {
+            labels: ['Events (7d)', 'Gallery (7d)', 'Inquiries (7d)'],
+            datasets: [
+                {
+                    label: 'Count',
+                    data: [
+                        Number(metrics.recent_events || 0),
+                        Number(metrics.recent_gallery || 0),
+                        Number(metrics.new_inquiries_week || 0),
+                    ],
+                    backgroundColor: ['#0ea5e9', '#10b981', '#f59e0b'],
+                    borderRadius: 8,
+                    maxBarThickness: 54,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#e2e8f0' } },
+                x: { grid: { display: false } },
+            },
+        },
+    });
+}
+
+function renderCmsDistributionChart(metrics) {
+    if (typeof Chart === 'undefined' || !refs.bookingDistributionChart) {
+        return;
+    }
+
+    if (state.dashboard.distributionChart) {
+        state.dashboard.distributionChart.destroy();
+    }
+
+    state.dashboard.distributionChart = new Chart(refs.bookingDistributionChart, {
+        type: 'doughnut',
+        data: {
+            labels: ['Published', 'Drafts'],
+            datasets: [
+                {
+                    data: [Number(metrics.published_content || 0), Number(metrics.draft_content || 0)],
+                    backgroundColor: ['#10b981', '#f59e0b'],
+                    borderColor: '#ffffff',
+                    borderWidth: 2,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        usePointStyle: true,
+                        boxWidth: 8,
+                        color: '#475569',
+                    },
+                },
+            },
+            cutout: '66%',
+        },
+    });
+}
+
+function renderCmsRecentActivity(activityList) {
+    refs.recentBookingsBody.innerHTML = '';
+    const rows = Array.isArray(activityList) ? activityList.slice(0, 8) : [];
+
+    if (!rows.length) {
+        refs.recentBookingsState.textContent = 'No recent activity yet.';
+        return;
+    }
+
+    refs.recentBookingsState.textContent = '';
+    rows.forEach((item) => {
+        const type = String(item.type || 'activity').replace(/_/g, ' ');
+        const prettyType = type.charAt(0).toUpperCase() + type.slice(1);
+        const row = document.createElement('tr');
+        row.innerHTML = '' +
+            '<td class="px-3 py-2 font-medium text-slate-900">' + prettyType + '</td>' +
+            '<td class="px-3 py-2 text-slate-700">' + (item.label || '-') + '</td>' +
+            '<td class="px-3 py-2 text-slate-600">' + (item.created_at ? formatScanTimestamp(item.created_at) : '-') + '</td>' +
+            '<td class="px-3 py-2 text-slate-600">' + (item.details || '-') + '</td>';
+        refs.recentBookingsBody.appendChild(row);
+    });
+}
+
+function renderCmsOperations(metrics) {
+    const newToday = Number(metrics.new_inquiries_today || 0);
+    const newWeek = Number(metrics.new_inquiries_week || 0);
+    const responseRate = Number(metrics.response_rate || 0);
+    const updatedWeek = Number(metrics.content_updated_week || 0);
+
+    refs.opsArrivals.textContent = newToday + ' today';
+    refs.opsGuests.textContent = newWeek + ' this week';
+    refs.opsStatus.textContent = responseRate.toFixed(1) + '% contacted';
+    refs.opsStatus.className = responseRate >= 70
+        ? 'mt-2 text-sm font-semibold text-emerald-700'
+        : responseRate >= 40
+            ? 'mt-2 text-sm font-semibold text-amber-700'
+            : 'mt-2 text-sm font-semibold text-rose-700';
+    refs.opsCapacityLoad.textContent = updatedWeek + ' content updates this week';
+}
+
+function refreshBookingDashboardWidgets() {
+    const allBookings = state.dashboard.allBookings || [];
+    const metrics = state.dashboard.lastMetrics || {};
+    const todayIso = getTodayIso();
+    const currentRange = getScopeRange(state.dashboard.scope, todayIso, false);
+    const previousRange = getScopeRange(state.dashboard.scope, todayIso, true);
+    const todayRange = getScopeRange('today', todayIso, false);
+
+    const currentSummary = summarizeBookings(filterBookingsByRange(allBookings, currentRange));
+    const previousSummary = summarizeBookings(filterBookingsByRange(allBookings, previousRange));
+    const todaySummary = summarizeBookings(filterBookingsByRange(allBookings, todayRange));
+
+    const totalDelta = currentSummary.total - previousSummary.total;
+    refs.metricTotal.textContent = currentSummary.total;
+    refs.metricTotalSubtext.textContent = (totalDelta >= 0 ? '+' : '') + totalDelta + ' from ' + (state.dashboard.scope === 'week' ? 'last week' : 'yesterday');
+    styleTrendBadge(refs.metricTotalTrend, totalDelta, true);
+
+    const pendingDelta = currentSummary.pending - previousSummary.pending;
+    refs.metricPending.textContent = currentSummary.pending;
+    refs.metricPendingSubtext.textContent = currentSummary.pending === 0
+        ? 'All cleared'
+        : Math.round((currentSummary.pending / Math.max(1, currentSummary.total)) * 100) + '% awaiting action';
+    styleTrendBadge(refs.metricPendingTrend, pendingDelta, false);
+
+    const confirmedDelta = currentSummary.confirmed - previousSummary.confirmed;
+    refs.metricConfirmed.textContent = currentSummary.confirmed;
+    refs.metricConfirmedSubtext.textContent = Math.round((currentSummary.confirmed / Math.max(1, currentSummary.total)) * 100) + '% of total';
+    styleTrendBadge(refs.metricConfirmedTrend, confirmedDelta, true);
+
+    setCapacityUsage(metrics, currentSummary.total);
+    renderBookingOperations(todaySummary, metrics);
+    renderRecentBookings(allBookings);
+    renderBookingTrendChart(allBookings);
+    renderBookingDistributionChart(currentSummary);
+    setScopeButtons();
+    setTrendButtons();
+    updateDashboardDateContext();
+}
+
+function refreshCmsDashboardWidgets() {
+    const metrics = state.dashboard.cmsMetrics || {};
+
+    refs.metricTotal.textContent = Number(metrics.total_events || 0);
+    refs.metricTotalSubtext.textContent = 'Published events';
+    refs.metricTotalTrend.textContent = '--';
+    refs.metricTotalTrend.className = 'rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600';
+
+    refs.metricPending.textContent = Number(metrics.total_gallery || 0);
+    refs.metricPendingSubtext.textContent = 'Published gallery items';
+    refs.metricPendingTrend.textContent = '--';
+    refs.metricPendingTrend.className = 'rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600';
+
+    refs.metricConfirmed.textContent = Number(metrics.total_inquiries || 0);
+    refs.metricConfirmedSubtext.textContent = 'Total inquiry conversions';
+    refs.metricConfirmedTrend.textContent = '--';
+    refs.metricConfirmedTrend.className = 'rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600';
+
+    refs.metricCapacity.textContent = Number(metrics.new_inquiries_today || 0);
+    refs.metricCapacitySubtext.textContent = 'New this week: ' + Number(metrics.new_inquiries_week || 0);
+    refs.capacityBar.style.width = '0%';
+    refs.capacityBar.className = 'h-2 rounded-full bg-slate-300';
+
+    renderCmsOperations(metrics);
+    renderCmsRecentActivity(metrics.recent_activity || []);
+    renderCmsTrendChart(metrics);
+    renderCmsDistributionChart(metrics);
+    updateDashboardDateContext();
+}
+
+async function loadDashboardData(silent = false) {
+    const bookingEnabled = Boolean(state.settings.bookingEnabled);
+    setDashboardModeCopy();
+
+    if (!bookingEnabled) {
+        if (!silent) {
+            refs.liveBadge.textContent = '● Updating';
+        }
+
+        const cmsResponse = await fetch('/api/admin/cms-metrics');
+        const cmsData = await cmsResponse.json();
+        if (!cmsResponse.ok) {
+            throw new Error(cmsData.error || cmsData.reason || 'Failed to load CMS metrics');
+        }
+
+        state.dashboard.cmsMetrics = cmsData || {};
+        refreshCmsDashboardWidgets();
+        refs.liveBadge.textContent = '● Live';
+        return;
+    }
+
+    const todayIso = getTodayIso();
+    if (!silent) {
+        refs.liveBadge.textContent = '● Updating';
+    }
+
+    const [bookingsResponse, metricsResponse] = await Promise.all([
+        fetch('/api/admin/bookings?status=all'),
+        fetch('/api/admin/dashboard-metrics?date=' + encodeURIComponent(todayIso)),
+    ]);
+
+    const bookingsData = await bookingsResponse.json();
+    if (!bookingsResponse.ok) {
+        throw new Error(bookingsData.error || bookingsData.reason || 'Failed to load dashboard bookings');
+    }
+
+    const metricsData = await metricsResponse.json();
+    if (!metricsResponse.ok) {
+        throw new Error(metricsData.error || metricsData.reason || 'Failed to load dashboard metrics');
+    }
+
+    state.dashboard.allBookings = bookingsData.bookings || [];
+    state.dashboard.lastMetrics = metricsData;
+    refreshBookingDashboardWidgets();
+    refs.liveBadge.textContent = '● Live';
+}
+
+function startDashboardAutoRefresh() {
+    if (state.dashboard.refreshTimer) {
+        clearInterval(state.dashboard.refreshTimer);
+    }
+
+    state.dashboard.refreshTimer = setInterval(async () => {
+        if (state.currentView !== 'dashboard') {
+            return;
+        }
+
+        try {
+            await loadDashboardData(true);
+        } catch (error) {
+            refs.liveBadge.textContent = '● Offline';
+        }
+    }, 45000);
+}
+
+async function openBookingsView() {
+    if (!state.settings.bookingEnabled) {
+        showToast('Bookings are hidden while CMS mode is active.', 'info');
+        await openEventsView();
+        return;
+    }
+
+    setMainView('bookings');
+    refs.tableState.textContent = 'Loading bookings...';
+    await Promise.all([loadMetrics(), loadBookings()]);
+}
+
+function renderCottagesTable() {
+    refs.cottagesBody.innerHTML = '';
+
+    if (!state.cottages.length) {
+        refs.cottagesState.textContent = 'No cottages saved yet.';
+        return;
+    }
+
+    refs.cottagesState.textContent = '';
+    state.cottages.forEach((cottage) => {
+        const status = String(cottage.status || 'inactive').toLowerCase();
+        const statusClass = status === 'active'
+            ? 'inline-flex rounded-full px-2.5 py-1 text-xs font-semibold bg-emerald-100 text-emerald-700'
+            : 'inline-flex rounded-full px-2.5 py-1 text-xs font-semibold bg-slate-100 text-slate-700';
+
+        const dayBookingStatus = normalizeBookingStatus(cottage.day_booking?.status);
+        let availabilityMarkup = '<span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold bg-emerald-100 text-emerald-700">Available</span>';
+        if (status !== 'active') {
+            availabilityMarkup = '<span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold bg-slate-200 text-slate-700">Inactive</span>';
+        } else if (dayBookingStatus) {
+            const badgeColor = dayBookingStatus === 'checked_in'
+                ? 'bg-sky-100 text-sky-700'
+                : dayBookingStatus === 'confirmed'
+                    ? 'bg-amber-100 text-amber-700'
+                    : 'bg-slate-200 text-slate-700';
+            const label = dayBookingStatus === 'checked_in' ? 'Checked-in' : dayBookingStatus === 'confirmed' ? 'Booked' : 'Pending';
+            const ref = cottage.day_booking?.booking_id ? ' #' + String(cottage.day_booking.booking_id).slice(0, 8) : '';
+            availabilityMarkup = '<span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ' + badgeColor + '">' + label + ref + '</span>';
+        }
+
+        const row = document.createElement('tr');
+        row.dataset.id = cottage.id;
+        row.innerHTML = '' +
+            '<td class="px-4 py-3 font-medium text-slate-900">' + (cottage.name || '-') + '</td>' +
+            '<td class="px-4 py-3">' + Number(cottage.capacity || 0) + '</td>' +
+            '<td class="px-4 py-3">P' + Number(cottage.price || 0) + '</td>' +
+            '<td class="px-4 py-3"><span class="' + statusClass + '">' + status + '</span></td>' +
+            '<td class="px-4 py-3">' + availabilityMarkup + '</td>' +
+            '<td class="px-4 py-3">' +
+                '<div class="flex items-center gap-2">' +
+                    '<button data-cottage-action="edit" data-id="' + cottage.id + '" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">Edit</button>' +
+                    '<button data-cottage-action="delete" data-id="' + cottage.id + '" class="rounded-md border border-rose-400 bg-white px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50">Delete</button>' +
+                '</div>' +
+            '</td>';
+        refs.cottagesBody.appendChild(row);
+    });
+}
+
+function resetCottageFormMode() {
+    state.editingCottageId = null;
+    refs.cottageFormTitle.textContent = 'Add Cottage';
+    refs.saveCottageBtn.textContent = 'Save Cottage';
+    refs.cancelCottageEditBtn.classList.add('hidden');
+    refs.cottageForm.reset();
+    refs.cottageStatus.value = 'active';
+}
+
+function setCottageEditMode(cottage) {
+    state.editingCottageId = cottage.id;
+    refs.cottageFormTitle.textContent = 'Edit Cottage';
+    refs.saveCottageBtn.textContent = 'Update Cottage';
+    refs.cancelCottageEditBtn.classList.remove('hidden');
+    refs.cottageName.value = cottage.name || '';
+    refs.cottageCapacity.value = Number(cottage.capacity || 0);
+    refs.cottagePrice.value = Number(cottage.price || 0);
+    refs.cottageStatus.value = String(cottage.status || 'active').toLowerCase();
+    refs.cottageName.focus();
+}
+
+async function deleteCottage(cottageId) {
+    const target = state.cottages.find((item) => item.id === cottageId);
+    const label = target?.name || 'this cottage';
+    const confirmed = window.confirm('Delete ' + label + '? This cannot be undone.');
+    if (!confirmed) {
+        return;
+    }
+
+    const response = await fetch('/api/admin/cottages/' + cottageId, { method: 'DELETE' });
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.error || data.reason || 'Failed to delete cottage');
+    }
+
+    if (state.editingCottageId === cottageId) {
+        resetCottageFormMode();
+    }
+    showToast('Cottage deleted', 'success');
+    await loadAdminCottages();
+}
+
+function onCottagesTableClick(event) {
+    const button = event.target.closest('button[data-cottage-action]');
+    if (!button) {
+        return;
+    }
+
+    const cottageId = button.dataset.id;
+    const action = button.dataset.cottageAction;
+    const cottage = state.cottages.find((item) => item.id === cottageId);
+
+    if (action === 'edit') {
+        if (!cottage) {
+            showToast('Cottage not found', 'error');
+            return;
+        }
+        setCottageEditMode(cottage);
+        return;
+    }
+
+    if (action === 'delete') {
+        deleteCottage(cottageId).catch((error) => {
+            showToast(error.message || 'Failed to delete cottage', 'error');
+        });
+    }
+}
+
+async function loadAdminCottages() {
+    refs.cottagesState.textContent = 'Loading cottages...';
+    const dateValue = refs.cottagesDateFilter.value || state.filters.cottagesDate || new Date().toISOString().slice(0, 10);
+    state.filters.cottagesDate = dateValue;
+    refs.cottagesDateFilter.value = dateValue;
+
+    const response = await fetch('/api/admin/cottages?date=' + encodeURIComponent(dateValue));
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.error || data.reason || 'Failed to load cottages');
+    }
+
+    state.cottages = data.cottages || [];
+    refs.cottagesAvailabilitySummary.textContent = 'Available: ' + Number(data.available_count || 0) + ' | Booked: ' + Number(data.booked_count || 0) + ' | Total: ' + Number(data.total_count || 0);
+    renderCottagesTable();
+}
+
+async function openCottagesView() {
+    setMainView('cottages');
+    if (!state.filters.cottagesDate) {
+        state.filters.cottagesDate = new Date().toISOString().slice(0, 10);
+    }
+    refs.cottagesDateFilter.value = state.filters.cottagesDate;
+    await loadAdminCottages();
+    if (!state.editingCottageId) {
+        resetCottageFormMode();
+    }
+}
+
+function setImagePreview(imageRef, imageUrl) {
+    const source = String(imageUrl || '').trim();
+    if (!source) {
+        imageRef.classList.add('hidden');
+        imageRef.src = '';
+        return;
+    }
+
+    imageRef.src = source;
+    imageRef.classList.remove('hidden');
+}
+
+function openModal(modalRef) {
+    if (!modalRef) {
+        return;
+    }
+    modalRef.classList.remove('hidden');
+    document.body.classList.add('overflow-hidden');
+}
+
+function closeModal(modalRef) {
+    if (!modalRef) {
+        return;
+    }
+    modalRef.classList.add('hidden');
+    if (refs.eventFormModal?.classList.contains('hidden') && refs.galleryFormModal?.classList.contains('hidden')) {
+        document.body.classList.remove('overflow-hidden');
+    }
+}
+
+function openEventFormModal() {
+    openModal(refs.eventFormModal);
+}
+
+function closeEventFormModal() {
+    closeModal(refs.eventFormModal);
+}
+
+function openGalleryFormModal() {
+    openModal(refs.galleryFormModal);
+}
+
+function closeGalleryFormModal() {
+    closeModal(refs.galleryFormModal);
+}
+
+function setLocalFilePreview(file, imageRef) {
+    if (!file) {
+        return;
+    }
+
+    const localUrl = URL.createObjectURL(file);
+    setImagePreview(imageRef, localUrl);
+}
+
+async function uploadCmsImage(file, module) {
+    if (!file) {
+        throw new Error('Choose an image file first');
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('module', module);
+
+    const response = await fetch('/api/admin/upload-image', {
+        method: 'POST',
+        body: formData,
+    });
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.error || data.reason || 'Failed to upload image');
+    }
+
+    const url = data.public_url || data.publicUrl || data.url || '';
+    if (!url) {
+        throw new Error('Upload finished but no public URL was returned. Check SUPABASE_URL and storage bucket settings.');
+    }
+
+    return url;
+}
+
+function eventStatusBadge(isPublished) {
+    return isPublished
+        ? '<span class="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">Published</span>'
+        : '<span class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">Draft</span>';
+}
+
+function renderEventsTable() {
+    refs.eventsBody.innerHTML = '';
+    if (!state.events.length) {
+        refs.eventsState.textContent = 'No events yet.';
+        return;
+    }
+
+    refs.eventsState.textContent = '';
+    state.events.forEach((item) => {
+        const row = document.createElement('tr');
+        const image = item.image_url
+            ? '<img src="' + item.image_url + '" alt="' + (item.title || 'Event') + '" class="h-14 w-24 rounded-md object-cover">'
+            : '<div class="h-14 w-24 rounded-md border border-dashed border-slate-300 bg-slate-50"></div>';
+        const dateText = item.event_date || '-';
+        const locationText = item.location || '-';
+        const featured = item.is_featured
+            ? '<span class="ml-2 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">Featured</span>'
+            : '';
+        const publishLabel = item.is_published ? 'Unpublish' : 'Publish';
+
+        row.innerHTML = '' +
+            '<td class="px-4 py-3">' + image + '</td>' +
+            '<td class="px-4 py-3 font-medium text-slate-900">' + (item.title || '-') + featured + '</td>' +
+            '<td class="px-4 py-3">' + dateText + '</td>' +
+            '<td class="px-4 py-3">' + locationText + '</td>' +
+            '<td class="px-4 py-3">' + eventStatusBadge(Boolean(item.is_published)) + '</td>' +
+            '<td class="px-4 py-3"><div class="flex flex-wrap gap-2">' +
+                '<button data-event-action="edit" data-id="' + item.id + '" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">Edit</button>' +
+                '<button data-event-action="toggle" data-id="' + item.id + '" class="rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50">' + publishLabel + '</button>' +
+                '<button data-event-action="delete" data-id="' + item.id + '" class="rounded-md border border-rose-400 bg-white px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50">Delete</button>' +
+            '</div></td>';
+        refs.eventsBody.appendChild(row);
+    });
+}
+
+function resetEventFormMode() {
+    state.editingEventId = null;
+    refs.eventId.value = '';
+    refs.eventForm.reset();
+    refs.eventImageFile.value = '';
+    refs.eventPublished.checked = false;
+    refs.eventFeatured.checked = false;
+    setImagePreview(refs.eventImagePreview, '');
+    refs.saveEventBtn.textContent = 'Save Event';
+}
+
+function setEventEditMode(item) {
+    state.editingEventId = item.id;
+    refs.eventId.value = item.id || '';
+    refs.eventTitle.value = item.title || '';
+    refs.eventDate.value = item.event_date || '';
+    refs.eventLocation.value = item.location || '';
+    refs.eventDescription.value = item.description || '';
+    refs.eventTags.value = Array.isArray(item.tags) ? item.tags.join(', ') : '';
+    refs.eventImageUrl.value = item.image_url || '';
+    refs.eventFeatured.checked = Boolean(item.is_featured);
+    refs.eventPublished.checked = Boolean(item.is_published);
+    setImagePreview(refs.eventImagePreview, item.image_url || '');
+    openEventFormModal();
+    refs.saveEventBtn.textContent = 'Update Event';
+    refs.eventTitle.focus();
+}
+
+async function loadAdminEvents() {
+    refs.eventsState.textContent = 'Loading events...';
+    const response = await fetch('/api/admin/events?include_unpublished=true');
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.error || data.reason || 'Failed to load events');
+    }
+
+    state.events = data.events || [];
+    renderEventsTable();
+}
+
+async function deleteEvent(eventId) {
+    const target = state.events.find((item) => item.id === eventId);
+    const label = target?.title || 'this event';
+    if (!window.confirm('Delete ' + label + '?')) {
+        return;
+    }
+
+    const response = await fetch('/api/admin/events/' + eventId, { method: 'DELETE' });
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.error || data.reason || 'Failed to delete event');
+    }
+
+    showToast('Event deleted', 'success');
+    await loadAdminEvents();
+}
+
+async function toggleEventPublish(eventId) {
+    const target = state.events.find((item) => item.id === eventId);
+    if (!target) {
+        return;
+    }
+
+    const response = await fetch('/api/admin/events/' + eventId, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_published: !Boolean(target.is_published) }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.error || data.reason || 'Failed to update event');
+    }
+
+    showToast(target.is_published ? 'Event unpublished' : 'Event published', 'success');
+    await loadAdminEvents();
+}
+
+async function openEventsView() {
+    setMainView('events');
+    await loadAdminEvents();
+    if (!state.editingEventId) {
+        resetEventFormMode();
+    }
+}
+
+function publishedPill(published) {
+    return published
+        ? '<span class="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">Published</span>'
+        : '<span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">Draft</span>';
+}
+
+function renderGalleryCategoryFilter() {
+    const categories = ['all'];
+    state.galleryItems.forEach((item) => {
+        const category = String(item.category || '').trim();
+        if (category && !categories.includes(category)) {
+            categories.push(category);
+        }
+    });
+
+    refs.galleryCategoryFilter.innerHTML = categories
+        .map((category) => '<option value="' + category + '">' + (category === 'all' ? 'All Categories' : category) + '</option>')
+        .join('');
+    refs.galleryCategoryFilter.value = state.filters.galleryCategory || 'all';
+}
+
+function renderGalleryGrid() {
+    refs.galleryItemsGrid.innerHTML = '';
+    const filter = state.filters.galleryCategory || 'all';
+    const visible = state.galleryItems.filter((item) => {
+        if (filter === 'all') {
+            return true;
+        }
+        return String(item.category || '').trim() === filter;
+    });
+
+    if (!visible.length) {
+        refs.galleryItemsState.textContent = 'No gallery items for this filter.';
+        return;
+    }
+
+    refs.galleryItemsState.textContent = '';
+    visible.forEach((item) => {
+        const card = document.createElement('article');
+        card.className = 'overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm';
+        card.innerHTML = '' +
+            '<img src="' + (item.image_url || '') + '" alt="' + (item.caption || 'Gallery item') + '" class="h-44 w-full object-cover">' +
+            '<div class="space-y-2 p-3">' +
+                '<div class="flex items-center justify-between gap-2">' +
+                    '<p class="truncate text-sm font-semibold text-slate-900">' + (item.caption || 'Untitled') + '</p>' +
+                    publishedPill(Boolean(item.is_published)) +
+                '</div>' +
+                '<p class="text-xs text-slate-500">' + (item.category || 'General') + '</p>' +
+                '<div class="flex flex-wrap gap-2">' +
+                    '<button data-gallery-action="edit" data-id="' + item.id + '" class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">Edit</button>' +
+                    '<button data-gallery-action="toggle" data-id="' + item.id + '" class="rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50">' + (item.is_published ? 'Unpublish' : 'Publish') + '</button>' +
+                    '<button data-gallery-action="delete" data-id="' + item.id + '" class="rounded-md border border-rose-400 bg-white px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50">Delete</button>' +
+                '</div>' +
+            '</div>';
+        refs.galleryItemsGrid.appendChild(card);
+    });
+}
+
+function resetGalleryFormMode() {
+    state.editingGalleryId = null;
+    refs.galleryItemId.value = '';
+    refs.galleryForm.reset();
+    refs.galleryImageFile.value = '';
+    refs.galleryPublished.checked = false;
+    setImagePreview(refs.galleryImagePreview, '');
+    refs.saveGalleryBtn.textContent = 'Save Item';
+}
+
+function setGalleryEditMode(item) {
+    state.editingGalleryId = item.id;
+    refs.galleryItemId.value = item.id || '';
+    refs.galleryImageUrl.value = item.image_url || '';
+    refs.galleryCaption.value = item.caption || '';
+    refs.galleryCategory.value = item.category || 'General';
+    refs.galleryPublished.checked = Boolean(item.is_published);
+    setImagePreview(refs.galleryImagePreview, item.image_url || '');
+    openGalleryFormModal();
+    refs.saveGalleryBtn.textContent = 'Update Item';
+    refs.galleryCaption.focus();
+}
+
+async function loadAdminGallery() {
+    refs.galleryItemsState.textContent = 'Loading gallery...';
+    const response = await fetch('/api/admin/gallery?include_unpublished=true');
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.error || data.reason || 'Failed to load gallery');
+    }
+
+    state.galleryItems = data.gallery || [];
+    renderGalleryCategoryFilter();
+    renderGalleryGrid();
+}
+
+async function deleteGalleryItem(itemId) {
+    const target = state.galleryItems.find((item) => item.id === itemId);
+    const label = target?.caption || 'this image';
+    if (!window.confirm('Delete ' + label + '?')) {
+        return;
+    }
+
+    const response = await fetch('/api/admin/gallery/' + itemId, { method: 'DELETE' });
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.error || data.reason || 'Failed to delete gallery item');
+    }
+
+    showToast('Gallery item deleted', 'success');
+    await loadAdminGallery();
+}
+
+async function toggleGalleryPublish(itemId) {
+    const target = state.galleryItems.find((item) => item.id === itemId);
+    if (!target) {
+        return;
+    }
+
+    const response = await fetch('/api/admin/gallery/' + itemId, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_published: !Boolean(target.is_published) }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.error || data.reason || 'Failed to update gallery item');
+    }
+
+    showToast(target.is_published ? 'Gallery item unpublished' : 'Gallery item published', 'success');
+    await loadAdminGallery();
+}
+
+async function openGalleryView() {
+    setMainView('gallery');
+    await loadAdminGallery();
+    if (!state.editingGalleryId) {
+        resetGalleryFormMode();
+    }
+}
+
+function inquiryStatusBadge(statusValue) {
+    const status = String(statusValue || 'new').toLowerCase();
+    const base = 'inline-flex rounded-full px-2.5 py-1 text-xs font-semibold';
+    if (status === 'contacted') {
+        return '<span class="' + base + ' bg-emerald-100 text-emerald-700">Contacted</span>';
+    }
+    if (status === 'archived') {
+        return '<span class="' + base + ' bg-slate-200 text-slate-700">Archived</span>';
+    }
+    return '<span class="' + base + ' bg-amber-100 text-amber-700">New</span>';
+}
+
+function renderInquiries() {
+    refs.inquiriesBody.innerHTML = '';
+    if (!state.inquiries.length) {
+        refs.inquiriesState.textContent = 'No inquiries found.';
+        return;
+    }
+
+    refs.inquiriesState.textContent = '';
+    state.inquiries.forEach((inquiry) => {
+        const created = inquiry.created_at ? formatScanTimestamp(inquiry.created_at) : '-';
+        const status = String(inquiry.status || 'new').toLowerCase();
+        const canMarkContacted = status === 'new';
+        const canArchive = status !== 'archived';
+        const canRestore = status === 'archived';
+
+        const row = document.createElement('tr');
+        row.innerHTML = '' +
+            '<td class="px-4 py-3">' + created + '</td>' +
+            '<td class="px-4 py-3 font-medium text-slate-900">' + (inquiry.name || '-') + '</td>' +
+            '<td class="px-4 py-3">' + (inquiry.email || '-') + '</td>' +
+            '<td class="px-4 py-3">' + (inquiry.phone || '-') + '</td>' +
+            '<td class="px-4 py-3">' + (inquiry.preferred_date || '-') + '</td>' +
+            '<td class="px-4 py-3 max-w-sm truncate" title="' + (inquiry.message || '-') + '">' + (inquiry.message || '-') + '</td>' +
+            '<td class="px-4 py-3">' + inquiryStatusBadge(status) + '</td>' +
+            '<td class="px-4 py-3">' +
+                '<div class="flex flex-wrap gap-2">' +
+                    '<button data-inquiry-action="contacted" data-id="' + inquiry.id + '" ' + (canMarkContacted ? '' : 'disabled') + ' class="rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50">Mark Contacted</button>' +
+                    '<button data-inquiry-action="archived" data-id="' + inquiry.id + '" ' + (canArchive ? '' : 'disabled') + ' class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">Archive</button>' +
+                    '<button data-inquiry-action="new" data-id="' + inquiry.id + '" ' + (canRestore ? '' : 'disabled') + ' class="rounded-md border border-sky-300 bg-white px-3 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-50">Restore</button>' +
+                '</div>' +
+            '</td>';
+        refs.inquiriesBody.appendChild(row);
+    });
+}
+
+async function loadInquiries() {
+    refs.inquiriesState.textContent = 'Loading inquiries...';
+    const status = refs.inquiryStatusFilter ? refs.inquiryStatusFilter.value : 'all';
+    const response = await fetch('/api/admin/inquiries?status=' + encodeURIComponent(status || 'all'));
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.error || data.reason || 'Failed to load inquiries');
+    }
+
+    state.inquiries = data.inquiries || [];
+    renderInquiries();
+}
+
+async function updateInquiryStatus(inquiryId, status) {
+    const response = await fetch('/api/admin/inquiries/' + inquiryId, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.error || data.reason || 'Failed to update inquiry');
+    }
+
+    showToast('Inquiry updated', 'success');
+    await loadInquiries();
+}
+
+async function openInquiriesView() {
+    setMainView('inquiries');
+    await loadInquiries();
+}
+
+function resetScanResultCard() {
+    refs.scanResultCard.classList.add('hidden');
+    refs.forceAllowBtn.disabled = true;
+    state.scanner.currentBookingId = '';
+    refs.scanStatusText.textContent = '-';
+    refs.scanMessageText.textContent = '-';
+    refs.scanBookingId.textContent = '-';
+    refs.scanBookingName.textContent = '-';
+    refs.scanBookingDate.textContent = '-';
+    refs.scanBookingStatus.textContent = '-';
+    refs.scanResultCard.className = 'hidden rounded-xl border border-slate-200 bg-slate-50 p-4';
+}
+
+function getAdminId() {
+    return state.admin.id || SCANNER_ADMIN_ID || 'admin-ui';
+}
+
+function updateAdminBadge() {
+    const role = String(state.admin.role || 'admin').toLowerCase();
+    refs.adminRoleBadge.textContent = role === 'staff' ? 'Staff' : 'Admin';
+}
+
+function applySystemModeUi() {
+    const bookingEnabled = Boolean(state.settings.bookingEnabled);
+    const isAdmin = String(state.admin.role || '').toLowerCase() === 'admin';
+
+    if (refs.systemModeBadge) {
+        refs.systemModeBadge.textContent = bookingEnabled ? 'Booking Mode' : 'CMS Mode (Booking Disabled)';
+        refs.systemModeBadge.className = bookingEnabled
+            ? 'rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700'
+            : 'rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700';
+    }
+
+    if (refs.toggleBookingBtn) {
+        refs.toggleBookingBtn.textContent = bookingEnabled ? 'Disable Booking' : 'Enable Booking';
+        refs.toggleBookingBtn.classList.toggle('hidden', !isAdmin);
+    }
+
+    const bookingLinks = [
+        refs.sidebarBookingsLink,
+        refs.mobileBookingsLink,
+        refs.sidebarCottagesLink,
+        refs.mobileCottagesLink,
+        refs.sidebarScannerLink,
+        refs.mobileScannerLink,
+        refs.sidebarCapacityLink,
+        refs.sidebarReportsLink,
+        refs.quickNewBookingBtn,
+        refs.quickScannerBtn,
+        refs.quickCottagesBtn,
+    ];
+    bookingLinks.forEach((element) => {
+        if (!element) {
+            return;
+        }
+        element.classList.toggle('hidden', !bookingEnabled);
+    });
+    setDashboardModeCopy();
+
+    if (!bookingEnabled && ['bookings', 'scanner', 'cottages'].includes(state.currentView)) {
+        setMainView('dashboard');
+        return;
+    }
+
+    if (state.currentView === 'dashboard') {
+        loadDashboardData(true).catch(() => {
+            refs.liveBadge.textContent = '● Offline';
+        });
+    }
+}
+
+async function loadSystemSettings() {
+    const response = await fetch('/api/admin/settings');
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.error || data.reason || 'Failed to load system settings');
+    }
+
+    state.settings.bookingEnabled = Boolean(data.settings?.booking_enabled);
+    applySystemModeUi();
+}
+
+async function toggleBookingSystem() {
+    const nextEnabled = !Boolean(state.settings.bookingEnabled);
+    if (!window.confirm((nextEnabled ? 'Enable' : 'Disable') + ' the booking system now?')) {
+        return;
+    }
+
+    if (refs.toggleBookingBtn) {
+        refs.toggleBookingBtn.disabled = true;
+    }
+
+    try {
+        const response = await fetch('/api/admin/settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ booking_enabled: nextEnabled }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || data.reason || 'Failed to update settings');
+        }
+
+        state.settings.bookingEnabled = Boolean(data.settings?.booking_enabled);
+        applySystemModeUi();
+        showToast(state.settings.bookingEnabled ? 'Booking mode enabled' : 'CMS mode enabled', 'success');
+    } catch (error) {
+        showToast(error.message || 'Failed to update booking mode', 'error');
+    } finally {
+        if (refs.toggleBookingBtn) {
+            refs.toggleBookingBtn.disabled = false;
+        }
+    }
+}
+
+async function ensureAdminSession() {
+    const token = getAccessToken();
+    if (!token) {
+        window.location.replace('/admin/login');
+        return false;
+    }
+
+    const response = await fetch('/api/admin/me');
+    if (response.status === 401) {
+        clearAccessToken();
+        window.location.replace('/admin/login');
+        return false;
+    }
+
+    const data = await response.json();
+    if (!response.ok || !data.admin) {
+        throw new Error(data.error || 'Unable to verify session');
+    }
+
+    state.admin.id = data.admin.id || '';
+    state.admin.email = data.admin.email || '';
+    state.admin.role = data.admin.role || 'admin';
+    updateAdminBadge();
+
+    return true;
+}
+
+async function logoutAdmin() {
+    try {
+        if (supabaseClient) {
+            await supabaseClient.auth.signOut();
+        }
+    } catch (error) {
+    } finally {
+        clearAccessToken();
+        window.location.replace('/admin/login');
+    }
+}
+
+function formatScanTimestamp(value) {
+    if (!value) {
+        return '-';
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+        return String(value);
+    }
+
+    return parsed.toLocaleString();
+}
+
+function renderScanLogs(logs) {
+    refs.scanLogsBody.innerHTML = '';
+    if (!logs.length) {
+        refs.scanLogsState.textContent = 'No scan logs yet.';
+        return;
+    }
+
+    refs.scanLogsState.textContent = '';
+    logs.forEach((log) => {
+        const result = String(log.result || 'invalid').toLowerCase();
+        const badgeClass = result === 'valid'
+            ? 'inline-flex rounded-full px-2.5 py-1 text-xs font-semibold bg-emerald-100 text-emerald-700'
+            : 'inline-flex rounded-full px-2.5 py-1 text-xs font-semibold bg-rose-100 text-rose-700';
+
+        const row = document.createElement('tr');
+        row.innerHTML = '' +
+            '<td class="px-4 py-3">' + formatScanTimestamp(log.scanned_at) + '</td>' +
+            '<td class="px-4 py-3 font-mono text-xs">' + (log.booking_id || '-') + '</td>' +
+            '<td class="px-4 py-3"><span class="' + badgeClass + '">' + result + '</span></td>' +
+            '<td class="px-4 py-3">' + (log.admin_id || '-') + '</td>';
+        refs.scanLogsBody.appendChild(row);
+    });
+}
+
+async function loadScanLogs() {
+    refs.scanLogsState.textContent = 'Loading scan logs...';
+    const response = await fetch('/api/admin/scan-logs?limit=25');
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.error || data.reason || 'Failed to load scan logs');
+    }
+
+    renderScanLogs(data.logs || []);
+}
+
+function parseBookingIdFromScan(text) {
+    const raw = String(text || '').trim();
+    if (!raw) {
+        return '';
+    }
+
+    try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed.booking_id === 'string') {
+            return parsed.booking_id.trim();
+        }
+    } catch (error) {
+    }
+
+    return raw;
+}
+
+function renderScanResult(data) {
+    const status = String(data.status || 'INVALID').toUpperCase();
+    const booking = data.booking || {};
+    state.scanner.currentBookingId = booking.id || '';
+    refs.forceAllowBtn.disabled = !state.scanner.currentBookingId;
+
+    refs.scanResultCard.classList.remove('hidden');
+    refs.scanStatusText.textContent = status;
+    refs.scanMessageText.textContent = data.message || '-';
+    refs.scanBookingId.textContent = booking.id || '-';
+    refs.scanBookingName.textContent = booking.full_name || '-';
+    refs.scanBookingDate.textContent = booking.date || '-';
+    refs.scanBookingStatus.textContent = booking.status || '-';
+
+    if (status === 'VALID' || status === 'CHECKED_OUT') {
+        refs.scanResultCard.className = 'rounded-xl border border-emerald-200 bg-emerald-50 p-4';
+    } else if (status === 'ALREADY_ARRIVED' || status === 'ALREADY_CHECKED_OUT' || status === 'LATE') {
+        refs.scanResultCard.className = 'rounded-xl border border-amber-200 bg-amber-50 p-4';
+    } else if (status === 'NO_SHOW') {
+        refs.scanResultCard.className = 'rounded-xl border border-rose-200 bg-rose-50 p-4';
+    } else {
+        refs.scanResultCard.className = 'rounded-xl border border-rose-200 bg-rose-50 p-4';
+    }
+}
+
+async function validateBookingId(bookingId, showToastOnSuccess = false) {
+    if (!bookingId) {
+        showToast('Booking ID is required', 'error');
+        return;
+    }
+
+    if (state.scanner.busy) {
+        return;
+    }
+
+    state.scanner.busy = true;
+    try {
+        const response = await fetch('/api/scan', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Scanner-Key': SCANNER_API_KEY,
+                'X-Admin-Id': getAdminId(),
+            },
+            body: JSON.stringify({ booking_id: bookingId, admin_id: getAdminId() }),
+        });
+        const data = await response.json();
+        renderScanResult(data);
+        await loadScanLogs().catch(() => {});
+
+        if (response.ok) {
+            if (showToastOnSuccess) {
+                const successMessage = String(data.status || '').toUpperCase() === 'CHECKED_OUT'
+                    ? 'Check-out accepted'
+                    : 'Check-in accepted';
+                showToast(successMessage, 'success');
+            }
+            if (data?.booking?.date) {
+                state.filters.cottagesDate = data.booking.date;
+                if (refs.cottagesDateFilter) {
+                    refs.cottagesDateFilter.value = data.booking.date;
+                }
+            }
+            await Promise.all([loadMetrics(), loadBookings().catch(() => {}), loadAdminCottages().catch(() => {})]);
+        } else {
+            showToast(data.message || data.error || 'Scan failed', 'error');
+        }
+    } catch (error) {
+        showToast(error.message || 'Scan request failed', 'error');
+    } finally {
+        state.scanner.busy = false;
+    }
+}
+
+async function onDecodedScan(decodedText) {
+    if (!decodedText || decodedText === state.scanner.lastScannedText) {
+        return;
+    }
+
+    state.scanner.lastScannedText = decodedText;
+    const bookingId = parseBookingIdFromScan(decodedText);
+    await validateBookingId(bookingId, true);
+}
+
+async function startScanner() {
+    if (state.scanner.active) {
+        return;
+    }
+
+    if (typeof Html5Qrcode === 'undefined') {
+        refs.scannerHint.textContent = 'Scanner library not loaded. Refresh the page and try again.';
+        return;
+    }
+
+    if (!refs.qrReader) {
+        return;
+    }
+
+    try {
+        resetScanResultCard();
+        state.scanner.lastScannedText = '';
+        if (!state.scanner.instance) {
+            state.scanner.instance = new Html5Qrcode('qrReader');
+        }
+
+        await state.scanner.instance.start(
+            { facingMode: 'environment' },
+            { fps: 8, qrbox: { width: 220, height: 220 } },
+            (decodedText) => {
+                onDecodedScan(decodedText);
+            },
+            () => {}
+        );
+
+        state.scanner.active = true;
+        refs.scannerHint.textContent = 'Scanner is active. Point the camera at a QR code.';
+    } catch (error) {
+        refs.scannerHint.textContent = 'Camera not available. You can still validate manually using Booking ID.';
+    }
+}
+
+async function stopScanner() {
+    if (!state.scanner.instance || !state.scanner.active) {
+        return;
+    }
+
+    try {
+        await state.scanner.instance.stop();
+        await state.scanner.instance.clear();
+    } catch (error) {
+    } finally {
+        state.scanner.active = false;
+    }
+}
+
+async function openScannerView() {
+    if (!state.settings.bookingEnabled) {
+        showToast('Scanner is unavailable while booking is disabled.', 'info');
+        await openEventsView();
+        return;
+    }
+
+    setMainView('scanner');
+    await loadScanLogs().catch(() => {});
+    await startScanner();
+}
+
+async function forceAllowEntry() {
+    const bookingId = state.scanner.currentBookingId || parseBookingIdFromScan(refs.manualBookingIdInput.value);
+    if (!bookingId) {
+        showToast('Scan or enter a booking ID first', 'error');
+        return;
+    }
+
+    const confirmed = window.confirm('Force allow this booking entry? Use only for manual fixes.');
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+        refs.forceAllowBtn.disabled = true;
+        const response = await fetch('/api/admin/scan/force-allow', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Scanner-Key': SCANNER_API_KEY,
+                'X-Admin-Id': getAdminId(),
+            },
+            body: JSON.stringify({ booking_id: bookingId, admin_id: getAdminId() }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || data.reason || 'Failed to force allow entry');
+        }
+
+        renderScanResult(data);
+        showToast('Force allow entry applied', 'success');
+        if (data?.booking?.date) {
+            state.filters.cottagesDate = data.booking.date;
+            if (refs.cottagesDateFilter) {
+                refs.cottagesDateFilter.value = data.booking.date;
+            }
+        }
+        await Promise.all([loadScanLogs().catch(() => {}), loadMetrics(), loadBookings().catch(() => {}), loadAdminCottages().catch(() => {})]);
+    } catch (error) {
+        refs.forceAllowBtn.disabled = false;
+        showToast(error.message || 'Failed to force allow entry', 'error');
+    }
+}
+
+function showToast(message, type = 'info') {
+    refs.toast.classList.remove('hidden', 'bg-emerald-600', 'bg-rose-600', 'bg-slate-900', 'text-white');
+    refs.toast.classList.add('text-white');
+    if (type === 'success') {
+        refs.toast.classList.add('bg-emerald-600');
+    } else if (type === 'error') {
+        refs.toast.classList.add('bg-rose-600');
+    } else {
+        refs.toast.classList.add('bg-slate-900');
+    }
+    refs.toast.textContent = message;
+
+    setTimeout(() => {
+        refs.toast.classList.add('hidden');
+    }, 2200);
+}
+
+function setCmsSubmittingLoader(visible, text = 'Saving content...') {
+    if (!refs.cmsSaveLoaderOverlay || !refs.cmsSaveLoaderText) {
+        return;
+    }
+
+    refs.cmsSaveLoaderText.textContent = text;
+    refs.cmsSaveLoaderOverlay.classList.toggle('hidden', !visible);
+    refs.cmsSaveLoaderOverlay.setAttribute('aria-busy', visible ? 'true' : 'false');
+}
+
+function normalizeBookingStatus(value) {
+    const status = String(value || '').toLowerCase();
+    if (status === 'arrived') {
+        return 'checked_in';
+    }
+    if (status === 'used') {
+        return 'completed';
+    }
+    return status;
+}
+
+function statusLabel(value) {
+    const status = normalizeBookingStatus(value);
+    if (status === 'checked_in') {
+        return 'Checked-in';
+    }
+    if (status === 'no_show') {
+        return 'No-show';
+    }
+    if (status === 'completed') {
+        return 'Completed';
+    }
+    if (!status) {
+        return 'Pending';
+    }
+    return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function statusBadge(status) {
+    status = normalizeBookingStatus(status);
+    const base = 'inline-flex rounded-full px-2.5 py-1 text-xs font-semibold';
+    if (status === 'pending') {
+        return base + ' bg-amber-100 text-amber-700';
+    }
+    if (status === 'confirmed') {
+        return base + ' bg-emerald-100 text-emerald-700';
+    }
+    if (status === 'checked_in') {
+        return base + ' bg-sky-100 text-sky-700';
+    }
+    if (status === 'completed') {
+        return base + ' bg-slate-200 text-slate-800';
+    }
+    if (status === 'no_show') {
+        return base + ' bg-rose-100 text-rose-700';
+    }
+    if (status === 'cancelled') {
+        return base + ' bg-rose-100 text-rose-700';
+    }
+    return base + ' bg-slate-100 text-slate-700';
+}
+
+function arrivalWindowBadge(booking) {
+    const value = String(booking.arrival_window_status || '').toLowerCase();
+    const base = 'inline-flex rounded-full px-2.5 py-1 text-xs font-semibold';
+    if (value === 'arrived') {
+        return '<span class="' + base + ' bg-emerald-100 text-emerald-700">Arrived</span>';
+    }
+    if (value === 'on_the_way') {
+        return '<span class="' + base + ' bg-sky-100 text-sky-700">On the way</span>';
+    }
+    if (value === 'late') {
+        return '<span class="' + base + ' bg-amber-100 text-amber-700">Late</span>';
+    }
+    if (value === 'no_show') {
+        return '<span class="' + base + ' bg-rose-100 text-rose-700">No-show</span>';
+    }
+    return '<span class="' + base + ' bg-slate-100 text-slate-700">Pending</span>';
+}
+
+function capacityPill(booking) {
+    const guests = Number(booking.num_people || 0);
+    const max = Number(booking.cottage_capacity || 0);
+    if (!max) {
+        return '<span class="text-xs text-slate-500">N/A</span>';
+    }
+
+    const pct = Math.min(100, Math.round((guests / max) * 100));
+    let color = 'text-emerald-700 bg-emerald-100';
+    if (pct >= 90) {
+        color = 'text-rose-700 bg-rose-100';
+    } else if (pct >= 70) {
+        color = 'text-amber-700 bg-amber-100';
+    }
+
+    return '<span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ' + color + '">' + guests + ' / ' + max + '</span>';
+}
+
+function renderActions(booking) {
+    const status = normalizeBookingStatus(booking.status);
+    if (status === 'checked_in') {
+        const disabledCheckedOut = booking._busy ? 'disabled' : '';
+        return '' +
+            '<button data-action="checkout" data-id="' + booking.id + '" ' + disabledCheckedOut + ' class="rounded-md border border-slate-400 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50">Checkout</button>';
+    }
+
+    if (status !== 'pending') {
+        return '<span class="text-xs text-slate-500">Finalized</span>';
+    }
+
+    const disabled = booking._busy ? 'disabled' : '';
+    return '' +
+        '<div class="flex items-center gap-2">' +
+        '<button data-action="approve" data-id="' + booking.id + '" ' + disabled + ' class="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">Approve</button>' +
+        '<button data-action="reject" data-id="' + booking.id + '" ' + disabled + ' class="rounded-md border border-rose-400 px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-50">Reject</button>' +
+        '</div>';
+}
+
+function renderTable() {
+    refs.body.innerHTML = '';
+
+    if (!state.bookings.length) {
+        refs.tableState.textContent = 'No bookings found';
+        return;
+    }
+
+    refs.tableState.textContent = '';
+    state.bookings.forEach((booking) => {
+        const status = normalizeBookingStatus(booking.status);
+        const row = document.createElement('tr');
+        row.className = 'cursor-pointer hover:bg-slate-50';
+        row.dataset.id = booking.id;
+        row.innerHTML = '' +
+            '<td class="px-4 py-3 font-medium text-sky-700">' + String(booking.id || '').slice(0, 8) + '</td>' +
+            '<td class="px-4 py-3">' + (booking.full_name || '-') + '</td>' +
+            '<td class="px-4 py-3">' + (booking.email || '-') + '</td>' +
+            '<td class="px-4 py-3">' + (booking.phone || '-') + '</td>' +
+            '<td class="px-4 py-3">' + (booking.date || '-') + '</td>' +
+            '<td class="px-4 py-3">' + (booking.arrival_time || '-') + '</td>' +
+            '<td class="px-4 py-3">' + arrivalWindowBadge(booking) + '</td>' +
+            '<td class="px-4 py-3">' + (booking.cottage_name || '-') + '</td>' +
+            '<td class="px-4 py-3">A:' + Number(booking.adults || 0) + ' C:' + Number(booking.children || 0) + '</td>' +
+            '<td class="px-4 py-3 font-semibold">P' + Number(booking.total_amount || 0) + '</td>' +
+            '<td class="px-4 py-3">' + capacityPill(booking) + '</td>' +
+            '<td class="px-4 py-3"><span class="' + statusBadge(status) + '">' + statusLabel(status) + '</span></td>' +
+            '<td class="px-4 py-3">' + renderActions(booking) + '</td>';
+        refs.body.appendChild(row);
+    });
+}
+
+function setCapacityUsage(metrics, scopedTotal = 0) {
+    const usage = metrics && metrics.capacity_usage_percent !== null && metrics.capacity_usage_percent !== undefined
+        ? Number(metrics.capacity_usage_percent)
+        : null;
+
+    if (usage === null || Number.isNaN(usage)) {
+        refs.metricCapacity.textContent = 'No live data';
+        refs.capacityBar.style.width = '0%';
+        refs.capacityBar.className = 'h-2 rounded-full bg-slate-300';
+        refs.metricCapacitySubtext.textContent = scopedTotal === 0
+            ? 'No bookings yet today'
+            : 'Capacity monitor unavailable';
+        return;
+    }
+
+    const bounded = Math.max(0, Math.min(100, usage));
+    refs.metricCapacity.textContent = Math.round(bounded) + '% Full';
+    refs.capacityBar.style.width = bounded + '%';
+    refs.capacityBar.className = 'h-2 rounded-full bg-emerald-500';
+
+    if (bounded >= 90) {
+        refs.capacityBar.className = 'h-2 rounded-full bg-rose-500';
+        refs.metricCapacitySubtext.textContent = 'High traffic expected';
+    } else if (bounded >= 70) {
+        refs.capacityBar.className = 'h-2 rounded-full bg-amber-500';
+        refs.metricCapacitySubtext.textContent = 'Busy window in progress';
+    } else {
+        refs.metricCapacitySubtext.textContent = 'Stable capacity load';
+    }
+}
+
+async function loadMetrics() {
+    const query = refs.filterDate.value ? '?date=' + encodeURIComponent(refs.filterDate.value) : '';
+    const response = await fetch('/api/admin/dashboard-metrics' + query);
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.error || data.reason || 'Failed to load metrics');
+    }
+
+    state.dashboard.lastMetrics = data;
+
+    if (state.currentView === 'dashboard' && state.dashboard.allBookings.length) {
+        refreshBookingDashboardWidgets();
+        return data;
+    }
+
+    refs.metricTotal.textContent = data.total_bookings_today;
+    refs.metricPending.textContent = data.pending_approvals;
+    refs.metricConfirmed.textContent = data.confirmed_bookings;
+    refs.metricTotalSubtext.textContent = 'Live today';
+    refs.metricPendingSubtext.textContent = data.pending_approvals === 0 ? 'All cleared' : 'Needs attention';
+    refs.metricConfirmedSubtext.textContent = 'Operational snapshot';
+    refs.metricTotalTrend.textContent = '--';
+    refs.metricPendingTrend.textContent = '--';
+    refs.metricConfirmedTrend.textContent = '--';
+    refs.metricTotalTrend.className = 'rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600';
+    refs.metricPendingTrend.className = 'rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600';
+    refs.metricConfirmedTrend.className = 'rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600';
+    setCapacityUsage(data, data.total_bookings_today || 0);
+    return data;
+}
+
+async function loadBookings() {
+    refs.tableState.textContent = 'Loading bookings...';
+    const params = new URLSearchParams();
+    if (refs.filterDate.value) {
+        params.set('date', refs.filterDate.value);
+    }
+    if (refs.filterStatus.value) {
+        params.set('status', refs.filterStatus.value);
+    }
+    if (refs.filterSearch.value.trim()) {
+        params.set('search', refs.filterSearch.value.trim());
+    }
+
+    const url = '/api/admin/bookings?' + params.toString();
+    const response = await fetch(url);
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.error || data.reason || 'Failed to load bookings');
+    }
+
+    state.bookings = data.bookings || [];
+    renderTable();
+}
+
+function openPanel(booking) {
+    const normalizedStatus = normalizeBookingStatus(booking.status);
+    state.selectedBookingId = booking.id;
+    refs.detailBookingId.textContent = booking.id || '-';
+    refs.detailFullName.textContent = booking.full_name || '-';
+    refs.detailEmail.textContent = booking.email || '-';
+    refs.detailPhone.textContent = booking.phone || '-';
+    refs.detailDate.textContent = booking.date || '-';
+    refs.detailArrivalTime.textContent = booking.arrival_time || '-';
+    refs.detailGracePeriod.textContent = Number(booking.grace_period_minutes || 0) + ' min';
+    refs.detailArrivalWindow.innerHTML = arrivalWindowBadge(booking);
+    refs.detailCottage.textContent = booking.cottage_name || '-';
+    refs.detailStatus.innerHTML = '<span class="' + statusBadge(normalizedStatus) + '">' + statusLabel(normalizedStatus) + '</span>';
+    refs.detailQrStatus.textContent = booking.qr_code ? 'Generated' : 'Not generated';
+    refs.detailAdults.textContent = Number(booking.adults || 0);
+    refs.detailChildren.textContent = Number(booking.children || 0);
+    refs.detailGuests.textContent = Number(booking.num_people || 0);
+
+    const cottagePrice = Number(booking.cottage_price || 0);
+    const adultSubtotal = Number(booking.adults || 0) * ADULT_FEE;
+    const childSubtotal = Number(booking.children || 0) * CHILD_FEE;
+
+    refs.detailCottagePrice.textContent = 'P' + cottagePrice;
+    refs.detailAdultSubtotal.textContent = 'P' + adultSubtotal;
+    refs.detailChildSubtotal.textContent = 'P' + childSubtotal;
+    refs.detailTotal.textContent = 'P' + Number(booking.total_amount || 0);
+
+    const actionable = normalizedStatus === 'pending' && !booking._busy;
+    const qrAvailable = Boolean(booking.qr_code);
+    const canResend = (normalizedStatus === 'confirmed' || normalizedStatus === 'checked_in' || normalizedStatus === 'completed') && Boolean(booking.email) && !booking._busy;
+    const canCheckout = normalizedStatus === 'checked_in' && !booking._busy;
+    refs.panelApproveBtn.disabled = !actionable;
+    refs.panelRejectBtn.disabled = !actionable;
+    refs.panelViewQrBtn.disabled = !qrAvailable;
+    refs.panelResendEmailBtn.disabled = !canResend;
+    refs.panelCheckoutBtn.disabled = !canCheckout;
+    refs.panel.classList.remove('translate-x-full');
+    refs.panelBackdrop.classList.remove('hidden');
+    document.body.classList.add('overflow-hidden');
+}
+
+function closePanel() {
+    refs.panel.classList.add('translate-x-full');
+    refs.panelBackdrop.classList.add('hidden');
+    document.body.classList.remove('overflow-hidden');
+    state.selectedBookingId = null;
+}
+
+function toCsvRow(values) {
+    return values.map((value) => {
+        const text = String(value ?? '');
+        if (text.includes(',') || text.includes('"') || text.includes('\n')) {
+            return '"' + text.replace(/"/g, '""') + '"';
+        }
+        return text;
+    }).join(',');
+}
+
+function exportCurrentBookingsCsv() {
+    if (!state.bookings.length) {
+        showToast('No rows to export', 'error');
+        return;
+    }
+
+    const header = [
+        'booking_id',
+        'date',
+        'arrival_time',
+        'grace_period_minutes',
+        'user_id',
+        'cottage_id',
+        'cottage_name',
+        'adults',
+        'children',
+        'num_people',
+        'total_amount',
+        'status',
+        'created_at',
+    ];
+
+    const lines = [toCsvRow(header)];
+    state.bookings.forEach((booking) => {
+        lines.push(toCsvRow([
+            booking.id,
+            booking.date,
+            booking.arrival_time,
+            booking.grace_period_minutes,
+            booking.user_id,
+            booking.cottage_id,
+            booking.cottage_name,
+            booking.adults,
+            booking.children,
+            booking.num_people,
+            booking.total_amount,
+            booking.status,
+            booking.created_at,
+        ]));
+    });
+
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'bookings-' + (refs.filterDate.value || 'all-dates') + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('CSV exported', 'success');
+}
+
+function mutateBooking(id, fn) {
+    state.bookings = state.bookings.map((booking) => {
+        if (booking.id !== id) {
+            return booking;
+        }
+        return fn({ ...booking });
+    });
+    renderTable();
+
+    const selected = state.bookings.find((booking) => booking.id === state.selectedBookingId);
+    if (selected) {
+        openPanel(selected);
+    }
+}
+
+async function applyAction(id, status) {
+    const target = state.bookings.find((booking) => booking.id === id);
+    if (!target || normalizeBookingStatus(target.status) !== 'pending') {
+        return;
+    }
+
+    const previous = { ...target };
+    mutateBooking(id, (booking) => {
+        booking._busy = true;
+        booking.status = status;
+        return booking;
+    });
+
+    try {
+        const path = status === 'confirmed' ? '/api/admin/bookings/' + id + '/approve' : '/api/admin/bookings/' + id + '/reject';
+        const response = await fetch(path, { method: 'POST' });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || data.reason || 'Failed to update booking');
+        }
+
+        mutateBooking(id, (booking) => {
+            booking._busy = false;
+            booking.status = data.booking?.status || status;
+            booking.qr_code = data.booking?.qr_code || booking.qr_code;
+            return booking;
+        });
+
+        const warningText = Array.isArray(data.warnings) && data.warnings.length ? ' (' + data.warnings[0] + ')' : '';
+        if (status === 'confirmed') {
+            const baseMessage = data.email_sent ? 'Booking approved and email sent' : 'Booking approved';
+            showToast(baseMessage + warningText, data.warnings?.length ? 'info' : 'success');
+        } else {
+            const baseMessage = data.email_sent ? 'Booking rejected and email sent' : 'Booking rejected';
+            showToast(baseMessage + warningText, data.warnings?.length ? 'info' : 'success');
+        }
+        await loadMetrics();
+    } catch (error) {
+        mutateBooking(id, () => ({ ...previous, _busy: false }));
+        showToast(error.message || 'Action failed', 'error');
+    }
+}
+
+function openQrForBooking(booking) {
+    if (!booking || !booking.qr_code) {
+        showToast('No QR code found for this booking', 'error');
+        return;
+    }
+    const path = String(booking.qr_code).replace(/^\/+/, '');
+    window.open('/static/' + path, '_blank');
+}
+
+async function resendConfirmationEmail(bookingId) {
+    const booking = state.bookings.find((item) => item.id === bookingId);
+    if (!booking) {
+        showToast('Booking not found', 'error');
+        return;
+    }
+
+    mutateBooking(bookingId, (next) => {
+        next._busy = true;
+        return next;
+    });
+
+    try {
+        const response = await fetch('/api/admin/bookings/' + bookingId + '/resend-email', { method: 'POST' });
+        const data = await response.json();
+        if (!response.ok) {
+            const reason = data.reason ? ' (' + data.reason + ')' : '';
+            throw new Error((data.error || 'Failed to resend email') + reason);
+        }
+
+        mutateBooking(bookingId, (next) => {
+            next._busy = false;
+            next.qr_code = data.booking?.qr_code || next.qr_code;
+            next.status = data.booking?.status || next.status;
+            return next;
+        });
+        showToast('Confirmation email sent', 'success');
+    } catch (error) {
+        mutateBooking(bookingId, (next) => {
+            next._busy = false;
+            return next;
+        });
+        showToast(error.message || 'Failed to resend email', 'error');
+    }
+}
+
+async function checkoutBooking(bookingId) {
+    const booking = state.bookings.find((item) => item.id === bookingId);
+    if (!booking || normalizeBookingStatus(booking.status) !== 'checked_in') {
+        return;
+    }
+
+    mutateBooking(bookingId, (next) => {
+        next._busy = true;
+        return next;
+    });
+
+    try {
+        const response = await fetch('/api/admin/bookings/' + bookingId + '/checkout', { method: 'POST' });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || data.reason || 'Failed to checkout booking');
+        }
+
+        mutateBooking(bookingId, (next) => {
+            next._busy = false;
+            next.status = data.booking?.status || 'completed';
+            next.checked_out_at = data.booking?.checked_out_at || next.checked_out_at;
+            return next;
+        });
+        showToast('Booking marked as completed', 'success');
+        await Promise.all([loadMetrics(), loadAdminCottages().catch(() => {})]);
+    } catch (error) {
+        mutateBooking(bookingId, (next) => {
+            next._busy = false;
+            return next;
+        });
+        showToast(error.message || 'Failed to checkout booking', 'error');
+    }
+}
+
+function onBodyClick(event) {
+    const actionBtn = event.target.closest('button[data-action]');
+    if (actionBtn) {
+        event.stopPropagation();
+        const bookingId = actionBtn.dataset.id;
+        if (actionBtn.dataset.action === 'approve') {
+            applyAction(bookingId, 'confirmed');
+        } else if (actionBtn.dataset.action === 'checkout') {
+            checkoutBooking(bookingId);
+        } else {
+            state.pendingRejectId = bookingId;
+            refs.confirmReject.classList.remove('hidden');
+            refs.confirmReject.classList.add('flex');
+        }
+        return;
+    }
+
+    const row = event.target.closest('tr[data-id]');
+    if (!row) {
+        return;
+    }
+
+    const booking = state.bookings.find((item) => item.id === row.dataset.id);
+    if (booking) {
+        openPanel(booking);
+    }
+}
+
+function bindEvents() {
+    const handleOpenView = async (openFn) => {
+        try {
+            if (state.currentView === 'scanner') {
+                await stopScanner();
+            }
+            await openFn();
+        } catch (error) {
+            showToast(error.message, 'error');
+        }
+    };
+
+    refs.sidebarBookingsLink.addEventListener('click', async (event) => {
+        event.preventDefault();
+        await handleOpenView(openBookingsView);
+    });
+
+    refs.logoutBtn.addEventListener('click', async () => {
+        await logoutAdmin();
+    });
+
+    refs.refreshDashboardBtn.addEventListener('click', async () => {
+        try {
+            await loadDashboardData();
+            showToast('Dashboard refreshed', 'success');
+        } catch (error) {
+            refs.liveBadge.textContent = '● Offline';
+            showToast(error.message || 'Failed to refresh dashboard', 'error');
+        }
+    });
+
+    refs.notifyBtn.addEventListener('click', () => {
+        showToast('Notifications panel coming soon', 'info');
+    });
+
+    refs.periodTodayBtn.addEventListener('click', async () => {
+        state.dashboard.scope = 'today';
+        try {
+            await loadDashboardData(true);
+        } catch (error) {
+            showToast(error.message || 'Failed to switch dashboard scope', 'error');
+        }
+    });
+
+    refs.periodWeekBtn.addEventListener('click', async () => {
+        state.dashboard.scope = 'week';
+        try {
+            await loadDashboardData(true);
+        } catch (error) {
+            showToast(error.message || 'Failed to switch dashboard scope', 'error');
+        }
+    });
+
+    refs.trendDailyBtn.addEventListener('click', () => {
+        if (!state.settings.bookingEnabled) {
+            return;
+        }
+        state.dashboard.trendGranularity = 'daily';
+        refreshBookingDashboardWidgets();
+    });
+
+    refs.trendWeeklyBtn.addEventListener('click', () => {
+        if (!state.settings.bookingEnabled) {
+            return;
+        }
+        state.dashboard.trendGranularity = 'weekly';
+        refreshBookingDashboardWidgets();
+    });
+
+    refs.toggleBookingBtn.addEventListener('click', async () => {
+        await toggleBookingSystem();
+    });
+
+    refs.quickNewBookingBtn.addEventListener('click', () => {
+        if (!state.settings.bookingEnabled) {
+            window.location.href = '/contact';
+            return;
+        }
+        window.location.href = '/book';
+    });
+
+    refs.quickScannerBtn.addEventListener('click', () => {
+        if (!state.settings.bookingEnabled) {
+            showToast('Scanner is unavailable in CMS mode.', 'info');
+            return;
+        }
+        window.location.href = '/admin/scanner';
+    });
+
+    refs.quickCottagesBtn.addEventListener('click', async () => {
+        await handleOpenView(openCottagesView);
+    });
+
+    refs.sidebarDashboardLink.addEventListener('click', async (event) => {
+        event.preventDefault();
+        await handleOpenView(async () => {
+            setMainView('dashboard');
+            await loadDashboardData(true);
+        });
+    });
+
+    refs.sidebarCottagesLink.addEventListener('click', async (event) => {
+        event.preventDefault();
+        await handleOpenView(openCottagesView);
+    });
+
+    refs.sidebarEventsLink.addEventListener('click', async (event) => {
+        event.preventDefault();
+        await handleOpenView(openEventsView);
+    });
+
+    refs.sidebarGalleryLink.addEventListener('click', async (event) => {
+        event.preventDefault();
+        await handleOpenView(openGalleryView);
+    });
+
+    refs.sidebarInquiriesLink.addEventListener('click', async (event) => {
+        event.preventDefault();
+        await handleOpenView(openInquiriesView);
+    });
+
+    refs.sidebarScannerLink.addEventListener('click', (event) => {
+        event.preventDefault();
+        if (!state.settings.bookingEnabled) {
+            showToast('Scanner is unavailable in CMS mode.', 'info');
+            return;
+        }
+        window.location.href = '/admin/scanner';
+    });
+
+    refs.mobileDashboardLink.addEventListener('click', async () => {
+        await handleOpenView(async () => {
+            setMainView('dashboard');
+            await loadDashboardData(true);
+        });
+    });
+
+    refs.mobileBookingsLink.addEventListener('click', async () => {
+        await handleOpenView(openBookingsView);
+    });
+
+    refs.mobileCottagesLink.addEventListener('click', async () => {
+        await handleOpenView(openCottagesView);
+    });
+
+    refs.mobileEventsLink.addEventListener('click', async () => {
+        await handleOpenView(openEventsView);
+    });
+
+    refs.mobileGalleryLink.addEventListener('click', async () => {
+        await handleOpenView(openGalleryView);
+    });
+
+    refs.mobileInquiriesLink.addEventListener('click', async () => {
+        await handleOpenView(openInquiriesView);
+    });
+
+    refs.mobileScannerLink.addEventListener('click', () => {
+        if (!state.settings.bookingEnabled) {
+            showToast('Scanner is unavailable in CMS mode.', 'info');
+            return;
+        }
+        window.location.href = '/admin/scanner';
+    });
+
+    refs.manualScanBtn.addEventListener('click', async () => {
+        const bookingId = parseBookingIdFromScan(refs.manualBookingIdInput.value);
+        await validateBookingId(bookingId, true);
+    });
+
+    refs.manualBookingIdInput.addEventListener('keydown', async (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            const bookingId = parseBookingIdFromScan(refs.manualBookingIdInput.value);
+            await validateBookingId(bookingId, true);
+        }
+    });
+
+    refs.forceAllowBtn.addEventListener('click', async () => {
+        await forceAllowEntry();
+    });
+
+    refs.refreshScanLogsBtn.addEventListener('click', async () => {
+        try {
+            await loadScanLogs();
+            showToast('Scan logs updated', 'success');
+        } catch (error) {
+            showToast(error.message || 'Failed to load scan logs', 'error');
+        }
+    });
+
+    refs.filterDate.addEventListener('change', async () => {
+        try {
+            if (state.currentView === 'bookings') {
+                await Promise.all([loadMetrics(), loadBookings()]);
+                return;
+            }
+            if (state.currentView === 'dashboard') {
+                await loadDashboardData(true);
+                return;
+            }
+            await loadMetrics();
+        } catch (error) {
+            showToast(error.message, 'error');
+        }
+    });
+
+    refs.filterStatus.addEventListener('change', async () => {
+        try {
+            await loadBookings();
+        } catch (error) {
+            showToast(error.message, 'error');
+        }
+    });
+
+    refs.inquiryStatusFilter.addEventListener('change', async () => {
+        try {
+            await loadInquiries();
+        } catch (error) {
+            showToast(error.message || 'Failed to load inquiries', 'error');
+        }
+    });
+
+    let searchTimer = null;
+    refs.filterSearch.addEventListener('input', () => {
+        if (searchTimer) {
+            clearTimeout(searchTimer);
+        }
+        searchTimer = setTimeout(async () => {
+            try {
+                await loadBookings();
+            } catch (error) {
+                showToast(error.message, 'error');
+            }
+        }, 250);
+    });
+
+    refs.body.addEventListener('click', onBodyClick);
+    refs.inquiriesBody.addEventListener('click', async (event) => {
+        const button = event.target.closest('button[data-inquiry-action]');
+        if (!button) {
+            return;
+        }
+
+        const inquiryId = button.dataset.id;
+        const status = button.dataset.inquiryAction;
+        try {
+            await updateInquiryStatus(inquiryId, status);
+        } catch (error) {
+            showToast(error.message || 'Failed to update inquiry', 'error');
+        }
+    });
+    refs.recentBookingsBody.addEventListener('click', (event) => {
+        const button = event.target.closest('button[data-recent-id]');
+        if (!button) {
+            return;
+        }
+
+        const booking = state.dashboard.allBookings.find((item) => item.id === button.dataset.recentId);
+        if (booking) {
+            openPanel(booking);
+        }
+    });
+    refs.closePanel.addEventListener('click', closePanel);
+    refs.panelBackdrop.addEventListener('click', closePanel);
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') {
+            return;
+        }
+
+        if (!refs.panel.classList.contains('translate-x-full')) {
+            closePanel();
+            return;
+        }
+
+        if (!refs.eventFormModal.classList.contains('hidden')) {
+            resetEventFormMode();
+            closeEventFormModal();
+            return;
+        }
+
+        if (!refs.galleryFormModal.classList.contains('hidden')) {
+            resetGalleryFormMode();
+            closeGalleryFormModal();
+        }
+    });
+    refs.exportCsvBtn.addEventListener('click', exportCurrentBookingsCsv);
+
+    refs.panelApproveBtn.addEventListener('click', async () => {
+        if (!state.selectedBookingId) {
+            return;
+        }
+        await applyAction(state.selectedBookingId, 'confirmed');
+    });
+
+    refs.panelViewQrBtn.addEventListener('click', () => {
+        if (!state.selectedBookingId) {
+            return;
+        }
+        const booking = state.bookings.find((item) => item.id === state.selectedBookingId);
+        openQrForBooking(booking);
+    });
+
+    refs.panelResendEmailBtn.addEventListener('click', async () => {
+        if (!state.selectedBookingId) {
+            return;
+        }
+        await resendConfirmationEmail(state.selectedBookingId);
+    });
+
+    refs.panelCheckoutBtn.addEventListener('click', async () => {
+        if (!state.selectedBookingId) {
+            return;
+        }
+        await checkoutBooking(state.selectedBookingId);
+    });
+
+    refs.panelRejectBtn.addEventListener('click', () => {
+        if (!state.selectedBookingId) {
+            return;
+        }
+        state.pendingRejectId = state.selectedBookingId;
+        refs.confirmReject.classList.remove('hidden');
+        refs.confirmReject.classList.add('flex');
+    });
+
+    refs.cancelRejectBtn.addEventListener('click', () => {
+        refs.confirmReject.classList.add('hidden');
+        refs.confirmReject.classList.remove('flex');
+        state.pendingRejectId = null;
+    });
+
+    refs.confirmRejectBtn.addEventListener('click', async () => {
+        const id = state.pendingRejectId;
+        refs.confirmReject.classList.add('hidden');
+        refs.confirmReject.classList.remove('flex');
+        state.pendingRejectId = null;
+        if (id) {
+            await applyAction(id, 'cancelled');
+        }
+    });
+
+    refs.cottagesBody.addEventListener('click', onCottagesTableClick);
+
+    refs.cottagesDateFilter.addEventListener('change', async () => {
+        state.filters.cottagesDate = refs.cottagesDateFilter.value || new Date().toISOString().slice(0, 10);
+        try {
+            await loadAdminCottages();
+        } catch (error) {
+            showToast(error.message || 'Failed to load cottages', 'error');
+        }
+    });
+
+    refs.cancelCottageEditBtn.addEventListener('click', () => {
+        resetCottageFormMode();
+    });
+
+    refs.cottageForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        refs.saveCottageBtn.disabled = true;
+        refs.cancelCottageEditBtn.disabled = true;
+        refs.saveCottageBtn.textContent = state.editingCottageId ? 'Updating...' : 'Saving...';
+
+        try {
+            const payload = {
+                name: refs.cottageName.value.trim(),
+                capacity: Number(refs.cottageCapacity.value),
+                price: Number(refs.cottagePrice.value),
+                status: refs.cottageStatus.value,
+            };
+
+            const editMode = Boolean(state.editingCottageId);
+            const endpoint = editMode
+                ? '/api/admin/cottages/' + state.editingCottageId
+                : '/api/admin/cottages';
+
+            const response = await fetch(endpoint, {
+                method: editMode ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || data.reason || 'Failed to save cottage');
+            }
+
+            showToast(editMode ? 'Cottage updated successfully' : 'Cottage saved successfully', 'success');
+            resetCottageFormMode();
+            await loadAdminCottages();
+        } catch (error) {
+            showToast(error.message || 'Failed to save cottage', 'error');
+        } finally {
+            refs.saveCottageBtn.disabled = false;
+            refs.cancelCottageEditBtn.disabled = false;
+            refs.saveCottageBtn.textContent = state.editingCottageId ? 'Update Cottage' : 'Save Cottage';
+        }
+    });
+
+    refs.toggleEventFormBtn.addEventListener('click', () => {
+        if (!state.editingEventId) {
+            resetEventFormMode();
+        }
+        openEventFormModal();
+        if (!state.editingEventId) {
+            refs.eventTitle.focus();
+        }
+    });
+
+    refs.closeEventModalBtn.addEventListener('click', () => {
+        resetEventFormMode();
+        closeEventFormModal();
+    });
+
+    refs.eventFormModal.addEventListener('click', (event) => {
+        if (event.target === refs.eventFormModal) {
+            resetEventFormMode();
+            closeEventFormModal();
+        }
+    });
+
+    refs.cancelEventEditBtn.addEventListener('click', () => {
+        resetEventFormMode();
+        closeEventFormModal();
+    });
+
+    refs.eventImageUrl.addEventListener('input', () => {
+        setImagePreview(refs.eventImagePreview, refs.eventImageUrl.value);
+    });
+
+    refs.eventImageFile.addEventListener('change', () => {
+        const file = refs.eventImageFile.files[0];
+        if (!file) {
+            return;
+        }
+        setLocalFilePreview(file, refs.eventImagePreview);
+    });
+
+    refs.uploadEventImageBtn.addEventListener('click', async () => {
+        try {
+            refs.uploadEventImageBtn.disabled = true;
+            refs.uploadEventImageBtn.textContent = 'Uploading...';
+            const url = await uploadCmsImage(refs.eventImageFile.files[0], 'events');
+            refs.eventImageUrl.value = url;
+            setImagePreview(refs.eventImagePreview, url);
+            showToast('Event image uploaded', 'success');
+        } catch (error) {
+            showToast(error.message || 'Image upload failed', 'error');
+        } finally {
+            refs.uploadEventImageBtn.disabled = false;
+            refs.uploadEventImageBtn.textContent = 'Upload Image';
+        }
+    });
+
+    refs.eventsBody.addEventListener('click', async (event) => {
+        const button = event.target.closest('button[data-event-action]');
+        if (!button) {
+            return;
+        }
+
+        const action = button.dataset.eventAction;
+        const itemId = button.dataset.id;
+        const item = state.events.find((row) => row.id === itemId);
+        if (!item) {
+            return;
+        }
+
+        try {
+            if (action === 'edit') {
+                setEventEditMode(item);
+                return;
+            }
+            if (action === 'toggle') {
+                await toggleEventPublish(itemId);
+                return;
+            }
+            if (action === 'delete') {
+                await deleteEvent(itemId);
+            }
+        } catch (error) {
+            showToast(error.message || 'Event action failed', 'error');
+        }
+    });
+
+    refs.eventForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        refs.saveEventBtn.disabled = true;
+        refs.cancelEventEditBtn.disabled = true;
+        refs.saveEventBtn.textContent = state.editingEventId ? 'Updating...' : 'Saving...';
+
+        try {
+            if (refs.eventImageFile.files[0]) {
+                const uploadedUrl = await uploadCmsImage(refs.eventImageFile.files[0], 'events');
+                refs.eventImageUrl.value = uploadedUrl;
+                setImagePreview(refs.eventImagePreview, uploadedUrl);
+            }
+
+            const payload = {
+                title: refs.eventTitle.value.trim(),
+                description: refs.eventDescription.value.trim(),
+                image_url: refs.eventImageUrl.value.trim(),
+                event_date: refs.eventDate.value || null,
+                location: refs.eventLocation.value.trim(),
+                tags: refs.eventTags.value.trim() ? refs.eventTags.value.split(',').map((tag) => tag.trim()).filter(Boolean) : [],
+                is_featured: refs.eventFeatured.checked,
+                is_published: refs.eventPublished.checked,
+            };
+
+            const editMode = Boolean(state.editingEventId);
+            const endpoint = editMode ? '/api/admin/events/' + state.editingEventId : '/api/admin/events';
+
+            const response = await fetch(endpoint, {
+                method: editMode ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || data.reason || 'Failed to save event');
+            }
+
+            showToast(editMode ? 'Event updated' : 'Event created', 'success');
+            resetEventFormMode();
+            closeEventFormModal();
+            await loadAdminEvents();
+        } catch (error) {
+            showToast(error.message || 'Failed to save event', 'error');
+        } finally {
+            refs.saveEventBtn.disabled = false;
+            refs.cancelEventEditBtn.disabled = false;
+            refs.saveEventBtn.textContent = state.editingEventId ? 'Update Event' : 'Save Event';
+        }
+    });
+
+    refs.toggleGalleryFormBtn.addEventListener('click', () => {
+        if (!state.editingGalleryId) {
+            resetGalleryFormMode();
+        }
+        openGalleryFormModal();
+        if (!state.editingGalleryId) {
+            refs.galleryCaption.focus();
+        }
+    });
+
+    refs.closeGalleryModalBtn.addEventListener('click', () => {
+        resetGalleryFormMode();
+        closeGalleryFormModal();
+    });
+
+    refs.galleryFormModal.addEventListener('click', (event) => {
+        if (event.target === refs.galleryFormModal) {
+            resetGalleryFormMode();
+            closeGalleryFormModal();
+        }
+    });
+
+    refs.cancelGalleryEditBtn.addEventListener('click', () => {
+        resetGalleryFormMode();
+        closeGalleryFormModal();
+    });
+
+    refs.galleryImageUrl.addEventListener('input', () => {
+        setImagePreview(refs.galleryImagePreview, refs.galleryImageUrl.value);
+    });
+
+    refs.galleryImageFile.addEventListener('change', () => {
+        const file = refs.galleryImageFile.files[0];
+        if (!file) {
+            return;
+        }
+        setLocalFilePreview(file, refs.galleryImagePreview);
+    });
+
+    refs.uploadGalleryImageBtn.addEventListener('click', async () => {
+        try {
+            refs.uploadGalleryImageBtn.disabled = true;
+            refs.uploadGalleryImageBtn.textContent = 'Uploading...';
+            const url = await uploadCmsImage(refs.galleryImageFile.files[0], 'gallery');
+            refs.galleryImageUrl.value = url;
+            setImagePreview(refs.galleryImagePreview, url);
+            showToast('Gallery image uploaded', 'success');
+        } catch (error) {
+            showToast(error.message || 'Image upload failed', 'error');
+        } finally {
+            refs.uploadGalleryImageBtn.disabled = false;
+            refs.uploadGalleryImageBtn.textContent = 'Upload Image';
+        }
+    });
+
+    refs.galleryCategoryFilter.addEventListener('change', () => {
+        state.filters.galleryCategory = refs.galleryCategoryFilter.value || 'all';
+        renderGalleryGrid();
+    });
+
+    refs.galleryItemsGrid.addEventListener('click', async (event) => {
+        const button = event.target.closest('button[data-gallery-action]');
+        if (!button) {
+            return;
+        }
+
+        const action = button.dataset.galleryAction;
+        const itemId = button.dataset.id;
+        const item = state.galleryItems.find((row) => row.id === itemId);
+        if (!item) {
+            return;
+        }
+
+        try {
+            if (action === 'edit') {
+                setGalleryEditMode(item);
+                return;
+            }
+            if (action === 'toggle') {
+                await toggleGalleryPublish(itemId);
+                return;
+            }
+            if (action === 'delete') {
+                await deleteGalleryItem(itemId);
+            }
+        } catch (error) {
+            showToast(error.message || 'Gallery action failed', 'error');
+        }
+    });
+
+    refs.galleryForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        refs.saveGalleryBtn.disabled = true;
+        refs.cancelGalleryEditBtn.disabled = true;
+        refs.saveGalleryBtn.textContent = state.editingGalleryId ? 'Updating...' : 'Saving...';
+
+        try {
+            if (refs.galleryImageFile.files[0]) {
+                const uploadedUrl = await uploadCmsImage(refs.galleryImageFile.files[0], 'gallery');
+                refs.galleryImageUrl.value = uploadedUrl;
+                setImagePreview(refs.galleryImagePreview, uploadedUrl);
+            }
+
+            const payload = {
+                image_url: refs.galleryImageUrl.value.trim(),
+                caption: refs.galleryCaption.value.trim(),
+                category: refs.galleryCategory.value.trim() || 'General',
+                is_published: refs.galleryPublished.checked,
+            };
+
+            const editMode = Boolean(state.editingGalleryId);
+            const endpoint = editMode ? '/api/admin/gallery/' + state.editingGalleryId : '/api/admin/gallery';
+            const response = await fetch(endpoint, {
+                method: editMode ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || data.reason || 'Failed to save gallery item');
+            }
+
+            showToast(editMode ? 'Gallery item updated' : 'Gallery item created', 'success');
+            resetGalleryFormMode();
+            closeGalleryFormModal();
+            await loadAdminGallery();
+        } catch (error) {
+            showToast(error.message || 'Failed to save gallery item', 'error');
+        } finally {
+            refs.saveGalleryBtn.disabled = false;
+            refs.cancelGalleryEditBtn.disabled = false;
+            refs.saveGalleryBtn.textContent = state.editingGalleryId ? 'Update Item' : 'Save Item';
+        }
+    });
+}
+
+async function init() {
+    bindEvents();
+    try {
+        if (!supabaseClient) {
+            throw new Error('Missing SUPABASE_URL or SUPABASE_ANON_KEY in environment.');
+        }
+
+        const authenticated = await ensureAdminSession();
+        if (!authenticated) {
+            return;
+        }
+
+        await loadSystemSettings();
+
+        if (String(state.admin.role || '').toLowerCase() === 'staff' && state.settings.bookingEnabled) {
+            window.location.replace('/admin/scanner');
+            return;
+        }
+
+        startDashboardAutoRefresh();
+
+        const path = window.location.pathname;
+        const hash = window.location.hash;
+        const defaultBookingsView = hash === '#bookings';
+        const defaultCottagesView = hash === '#cottages';
+        const defaultEventsView = hash === '#events' || path === '/admin/events';
+        const defaultGalleryView = hash === '#gallery' || path === '/admin/gallery';
+        const defaultInquiriesView = hash === '#inquiries';
+        const defaultScannerView = hash === '#scanner';
+        if (defaultCottagesView) {
+            if (!state.settings.bookingEnabled) {
+                await openEventsView();
+                return;
+            }
+            await openCottagesView();
+            return;
+        }
+        if (defaultEventsView) {
+            await openEventsView();
+            return;
+        }
+        if (defaultGalleryView) {
+            await openGalleryView();
+            return;
+        }
+        if (defaultInquiriesView) {
+            await openInquiriesView();
+            return;
+        }
+        if (defaultScannerView) {
+            if (!state.settings.bookingEnabled) {
+                setMainView('dashboard');
+                await loadDashboardData(true);
+                return;
+            }
+            window.location.href = '/admin/scanner';
+            return;
+        }
+        if (defaultBookingsView) {
+            if (!state.settings.bookingEnabled) {
+                setMainView('dashboard');
+                await loadDashboardData(true);
+                return;
+            }
+            await openBookingsView();
+            return;
+        }
+
+        if (!state.settings.bookingEnabled) {
+            setMainView('dashboard');
+            await loadDashboardData(true);
+            return;
+        }
+
+        setMainView('dashboard');
+        await loadDashboardData(true);
+    } catch (error) {
+        showToast(error.message || 'Failed to load dashboard data.', 'error');
+    }
+}
+
+init();
+</script>
+
+</body>
+</html>
